@@ -1,0 +1,6 @@
+{
+  "name": "Proton Launch Options Manager",
+  "description": "Manage and customize Linux Steam Proton launch options with checklist toggles, live command preview, VDF generator/editor, and portable C source code generator.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
