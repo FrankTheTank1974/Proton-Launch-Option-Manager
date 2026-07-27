@@ -11,8 +11,9 @@ import { VdfImportExportModal } from './components/VdfImportExportModal';
 import { PresetProfilesModal } from './components/PresetProfilesModal';
 import { GeminiAssistantModal } from './components/GeminiAssistantModal';
 import { AddGameModal } from './components/AddGameModal';
+import { ProtonDbModal } from './components/ProtonDbModal';
 import { PROTON_FLAGS } from './data/protonFlagsData';
-import { Sparkles, Terminal, Gamepad2, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { Sparkles, Terminal, Gamepad2, ShieldCheck, CheckCircle2, MessageSquareQuote } from 'lucide-react';
 
 export default function App() {
   const [games, setGames] = useState<SteamGame[]>(INITIAL_STEAM_GAMES);
@@ -48,6 +49,7 @@ export default function App() {
   const [isVdfSyncOpen, setIsVdfSyncOpen] = useState(false);
   const [isPresetsOpen, setIsPresetsOpen] = useState(false);
   const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false);
+  const [isProtonDbModalOpen, setIsProtonDbModalOpen] = useState(false);
   const [isAddGameOpen, setIsAddGameOpen] = useState(false);
 
   // Toast notification state
@@ -247,13 +249,22 @@ export default function App() {
               </div>
             </div>
 
-            <button
-              onClick={() => setIsAIAssistantOpen(true)}
-              className="bg-purple-900/40 hover:bg-purple-900/70 text-purple-200 border border-purple-700/50 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-              <span>AI Optimizer</span>
-            </button>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setIsProtonDbModalOpen(true)}
+                className="bg-amber-900/40 hover:bg-amber-900/70 text-amber-200 border border-amber-700/50 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm"
+              >
+                <MessageSquareQuote className="w-3.5 h-3.5 text-amber-400" />
+                <span>ProtonDB Advice</span>
+              </button>
+              <button
+                onClick={() => setIsAIAssistantOpen(true)}
+                className="bg-purple-900/40 hover:bg-purple-900/70 text-purple-200 border border-purple-700/50 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                <span>AI Optimizer</span>
+              </button>
+            </div>
           </div>
 
           {/* Live Command Preview Box */}
@@ -318,6 +329,21 @@ export default function App() {
         isOpen={isAddGameOpen}
         onClose={() => setIsAddGameOpen(false)}
         onAddGame={handleAddGame}
+      />
+
+      <ProtonDbModal
+        isOpen={isProtonDbModalOpen}
+        onClose={() => setIsProtonDbModalOpen(false)}
+        selectedGame={selectedGame}
+        distro={distro}
+        onApplyRecommendedFlags={(cmd) => {
+          handleApplyCommandToGame(cmd);
+          const parsed = parseCommandString(cmd);
+          setEnabledFlags(parsed.enabledFlags);
+          setCustomEnvVars(parsed.customEnvVars);
+          setExtraArgs(parsed.extraArgs);
+          showToast('Applied ProtonDB community flags');
+        }}
       />
     </div>
   );
