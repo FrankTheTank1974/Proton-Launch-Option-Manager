@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { SteamGame } from '../types';
-import { Search, Star, Gamepad2, Layers, CheckCircle2, Plus } from 'lucide-react';
+import { Search, Star, Gamepad2, Layers, CheckCircle2, Plus, HardDrive } from 'lucide-react';
 
 interface GameLibraryListProps {
   games: SteamGame[];
@@ -8,6 +8,7 @@ interface GameLibraryListProps {
   onSelectGame: (game: SteamGame) => void;
   onToggleFavorite: (id: string) => void;
   onOpenAddGame: () => void;
+  onOpenScanLocalLibrary?: () => void;
 }
 
 export const GameLibraryList: React.FC<GameLibraryListProps> = ({
@@ -16,6 +17,7 @@ export const GameLibraryList: React.FC<GameLibraryListProps> = ({
   onSelectGame,
   onToggleFavorite,
   onOpenAddGame,
+  onOpenScanLocalLibrary,
 }) => {
   const [search, setSearch] = useState('');
   const [filterFavorite, setFilterFavorite] = useState(false);
@@ -41,13 +43,26 @@ export const GameLibraryList: React.FC<GameLibraryListProps> = ({
           </span>
         </div>
         
-        <button
-          onClick={onOpenAddGame}
-          className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-medium hover:underline"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Add Game</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          {onOpenScanLocalLibrary && (
+            <button
+              onClick={onOpenScanLocalLibrary}
+              className="text-xs bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 border border-cyan-700/60 px-2.5 py-1 rounded-lg flex items-center gap-1.5 font-semibold transition shadow-sm"
+              title="Detect and add all games installed in your local Steam library"
+            >
+              <HardDrive className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Detect Local Library</span>
+            </button>
+          )}
+
+          <button
+            onClick={onOpenAddGame}
+            className="text-xs text-slate-400 hover:text-cyan-300 flex items-center gap-1 font-medium hover:underline px-1"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add Custom</span>
+          </button>
+        </div>
       </div>
 
       {/* Search Input & Favorite Filter */}

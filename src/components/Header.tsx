@@ -19,6 +19,7 @@ interface HeaderProps {
   onOpenPresets: () => void;
   onOpenAIAssistant: () => void;
   onOpenAddGame: () => void;
+  onOpenScanLocalLibrary?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -29,6 +30,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenPresets,
   onOpenAIAssistant,
   onOpenAddGame,
+  onOpenScanLocalLibrary,
 }) => {
   return (
     <header className="bg-slate-900 border-b border-slate-800 text-white sticky top-0 z-30 shadow-lg">
@@ -75,6 +77,18 @@ export const Header: React.FC<HeaderProps> = ({
                 <option value="Gentoo / Void" className="bg-slate-900 text-white">Gentoo / Void</option>
               </select>
             </div>
+
+            {/* Scan Local Library */}
+            {onOpenScanLocalLibrary && (
+              <button
+                onClick={onOpenScanLocalLibrary}
+                className="flex items-center space-x-1.5 bg-cyan-950/80 hover:bg-cyan-900/90 text-cyan-200 border border-cyan-700/60 px-3 py-1.5 rounded-lg text-xs font-semibold transition shadow-sm"
+                title="Scan and import all installed Steam games from local directory"
+              >
+                <HardDrive className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Scan Steam Games</span>
+              </button>
+            )}
 
             {/* Presets */}
             <button

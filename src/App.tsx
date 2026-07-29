@@ -12,6 +12,7 @@ import { PresetProfilesModal } from './components/PresetProfilesModal';
 import { GeminiAssistantModal } from './components/GeminiAssistantModal';
 import { AddGameModal } from './components/AddGameModal';
 import { ProtonDbModal } from './components/ProtonDbModal';
+import { ScanLocalLibraryModal } from './components/ScanLocalLibraryModal';
 import { PROTON_FLAGS } from './data/protonFlagsData';
 import { Sparkles, Terminal, Gamepad2, ShieldCheck, CheckCircle2, MessageSquareQuote } from 'lucide-react';
 
@@ -51,6 +52,31 @@ export default function App() {
   const [isAIAssistantOpen, setIsAIAssistantOpen] = useState(false);
   const [isProtonDbModalOpen, setIsProtonDbModalOpen] = useState(false);
   const [isAddGameOpen, setIsAddGameOpen] = useState(false);
+  const [isScanLocalLibraryOpen, setIsScanLocalLibraryOpen] = useState(false);
+
+  // Import detected games from local scan or directory picker
+  const handleImportLocalGames = (newGames: SteamGame[]) => {
+    setGames((prev) => {
+      const existingAppIds = new Set(prev.map((g) => g.appId));
+      const filteredNew = newGames.filter((g) => !existingAppIds.has(g.appId));
+      
+      // Update existing games if new launch options detected
+      const updatedPrev = prev.map((existing) => {
+        const foundNew = newGames.find((n) => n.appId === existing.appId);
+        if (foundNew && foundNew.currentLaunchOptions && !existing.currentLaunchOptions) {
+          return { ...existing, currentLaunchOptions: foundNew.currentLaunchOptions };
+        }
+        return existing;
+      });
+
+      return [...updatedPrev, ...filteredNew];
+    });
+
+    if (newGames.length > 0) {
+      setSelectedGameId(newGames[0].id);
+      showToast(`Imported ${newGames.length} games into Steam library`);
+    }
+  };
 
   // Toast notification state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -204,6 +230,7 @@ export default function App() {
         onOpenPresets={() => setIsPresetsOpen(true)}
         onOpenAIAssistant={() => setIsAIAssistantOpen(true)}
         onOpenAddGame={() => setIsAddGameOpen(true)}
+        onOpenScanLocalLibrary={() => setIsScanLocalLibraryOpen(true)}
       />
 
       {/* Primary Layout Grid */}
@@ -217,6 +244,7 @@ export default function App() {
             onSelectGame={handleSelectGame}
             onToggleFavorite={handleToggleFavorite}
             onOpenAddGame={() => setIsAddGameOpen(true)}
+            onOpenScanLocalLibrary={() => setIsScanLocalLibraryOpen(true)}
           />
         </div>
 
@@ -344,6 +372,12 @@ export default function App() {
           setExtraArgs(parsed.extraArgs);
           showToast('Applied ProtonDB community flags');
         }}
+      />
+
+      <ScanLocalLibraryModal
+        isOpen={isScanLocalLibraryOpen}
+        onClose={() => setIsScanLocalLibraryOpen(false)}
+        onImportGames={handleImportLocalGames}
       />
     </div>
   );

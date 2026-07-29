@@ -1,5 +1,31 @@
 import { VdfAppConfig } from '../types';
 
+export function parseAppManifestAcf(acfText: string): { appId: string; name: string } | null {
+  if (!acfText) return null;
+  const appIdMatch = acfText.match(/"appid"\s*"(\d+)"/i);
+  const nameMatch = acfText.match(/"name"\s*"([^"]*)"/i);
+  if (appIdMatch && nameMatch) {
+    return {
+      appId: appIdMatch[1],
+      name: nameMatch[1],
+    };
+  }
+  return null;
+}
+
+export function parseLibraryFoldersVdf(vdfText: string): string[] {
+  const paths: string[] = [];
+  if (!vdfText) return paths;
+
+  // Match "path" "..." inside libraryfolders.vdf
+  const pathRegex = /"path"\s*"([^"]+)"/gi;
+  let match;
+  while ((match = pathRegex.exec(vdfText)) !== null) {
+    paths.push(match[1]);
+  }
+  return paths;
+}
+
 export function parseLocalConfigVdf(vdfText: string): VdfAppConfig[] {
   const results: VdfAppConfig[] = [];
   

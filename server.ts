@@ -1,5 +1,7 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
+import os from 'os';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 
@@ -173,6 +175,138 @@ Return ONLY valid JSON without markdown fences if possible.`,
         recommendedCommand: `PROTON_USE_NTSYNC=1 gamemoderun mangohud %command%`,
         sourceUrl: appId ? `https://www.protondb.com/app/${appId}` : `https://www.protondb.com`,
       });
+    }
+  });
+
+  // Steam Local Auto-Scanner Endpoint
+  app.get('/api/steam/scan-local', (req, res) => {
+    try {
+      const homeDir = os.homedir();
+      const detectedGamesMap = new Map<string, { appId: number; name: string; currentLaunchOptions: string; sourcePath: string }>();
+
+      const possiblePaths = [
+        path.join(homeDir, '.local/share/Steam'),
+        path.join(homeDir, '.steam/steam'),
+        path.join(homeDir, '.steam/root'),
+        path.join(homeDir, '.var/app/com.valvesoftware.Steam/.local/share/Steam'),
+        '/home/deck/.local/share/Steam',
+        'C:\\Program Files (x86)\\Steam',
+        'C:\\Program Files\\Steam',
+        path.join(homeDir, 'Library/Application Support/Steam'),
+      ];
+
+      const steamAppsFolders: string[] = [];
+
+      for (const basePath of possiblePaths) {
+        if (fs.existsSync(basePath)) {
+          const steamApps = path.join(basePath, 'steamapps');
+          if (fs.existsSync(steamApps) && !steamAppsFolders.includes(steamApps)) {
+            steamAppsFolders.push(steamApps);
+          }
+
+          const libraryFoldersVdf = path.join(steamApps, 'libraryfolders.vdf');
+          if (fs.existsSync(libraryFoldersVdf)) {
+            try {
+              const content = fs.readFileSync(libraryFoldersVdf, 'utf-8');
+              const pathMatches = content.match(/"path"\s*"([^"]+)"/gi);
+              if (pathMatches) {
+                for (const pm of pathMatches) {
+                  const cleanPath = pm.replace(/"path"\s*"/i, '').replace(/"$/, '').replace(/\\\\/g, '/');
+                  const extraApps = path.join(cleanPath, 'steamapps');
+                  if (fs.existsSync(extraApps) && !steamAppsFolders.includes(extraApps)) {
+                    steamAppsFolders.push(extraApps);
+                  }
+                }
+              }
+            } catch (e) {
+              console.warn('Error reading libraryfolders.vdf:', e);
+            }
+          }
+        }
+      }
+
+      for (const appsDir of steamAppsFolders) {
+        try {
+          const files = fs.readdirSync(appsDir);
+          for (const file of files) {
+            if (file.startsWith('appmanifest_') && file.endsWith('.acf')) {
+              try {
+                const filePath = path.join(appsDir, file);
+                const acfText = fs.readFileSync(filePath, 'utf-8');
+                const appIdMatch = acfText.match(/"appid"\s*"(\d+)"/i);
+                const nameMatch = acfText.match(/"name"\s*"([^"]*)"/i);
+
+                if (appIdMatch && nameMatch) {
+                  const appId = appIdMatch[1];
+                  const name = nameMatch[1];
+                  if (name && !name.toLowerCase().includes('steamworks common redistributables') && !name.toLowerCase().includes('proton')) {
+                    detectedGamesMap.set(appId, {
+                      appId: parseInt(appId, 10),
+                      name,
+                      currentLaunchOptions: '',
+                      sourcePath: filePath,
+                    });
+                  }
+                }
+              } catch (err) {
+                console.warn(`Error reading ${file}:`, err);
+              }
+            }
+          }
+        } catch (err) {
+          console.warn(`Error scanning directory ${appsDir}:`, err);
+        }
+      }
+
+      for (const basePath of possiblePaths) {
+        const userDataDir = path.join(basePath, 'userdata');
+        if (fs.existsSync(userDataDir)) {
+          try {
+            const userFolders = fs.readdirSync(userDataDir);
+            for (const userFolder of userFolders) {
+              const localConfig = path.join(userDataDir, userFolder, 'config/localconfig.vdf');
+              if (fs.existsSync(localConfig)) {
+                try {
+                  const vdfText = fs.readFileSync(localConfig, 'utf-8');
+                  const appIdRegex = /"(\d+)"\s*\{([^}]*)\}/g;
+                  let match;
+                  while ((match = appIdRegex.exec(vdfText)) !== null) {
+                    const appId = match[1];
+                    const appBody = match[2];
+                    const launchOptsMatch = appBody.match(/"LaunchOptions"\s*"([^"]*)"/i);
+                    if (launchOptsMatch && detectedGamesMap.has(appId)) {
+                      const existing = detectedGamesMap.get(appId)!;
+                      existing.currentLaunchOptions = launchOptsMatch[1];
+                    }
+                  }
+                } catch (err) {
+                  console.warn(`Error parsing localconfig.vdf at ${localConfig}:`, err);
+                }
+              }
+            }
+          } catch (err) {
+            console.warn('Error scanning userdata:', err);
+          }
+        }
+      }
+
+      const detectedGames = Array.from(detectedGamesMap.values()).map((g) => ({
+        ...g,
+        protonVersion: 'Proton Experimental',
+        bannerUrl: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${g.appId}/header.jpg`,
+        bannerHeroUrl: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${g.appId}/library_hero.jpg`,
+      }));
+
+      return res.json({
+        status: 'ok',
+        steamPathFound: steamAppsFolders.length > 0,
+        steamAppsFolders,
+        count: detectedGames.length,
+        detectedGames,
+      });
+    } catch (err) {
+      console.error('Steam scan error:', err);
+      return res.status(500).json({ error: 'Failed scanning local Steam library' });
     }
   });
 
