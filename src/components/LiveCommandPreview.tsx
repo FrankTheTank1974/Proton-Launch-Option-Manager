@@ -11,7 +11,8 @@ import {
   ShieldCheck, 
   Eye, 
   Play,
-  HardDrive
+  HardDrive,
+  DownloadCloud
 } from 'lucide-react';
 
 interface LiveCommandPreviewProps {
@@ -20,6 +21,7 @@ interface LiveCommandPreviewProps {
   onApplyCommand: (command: string) => void;
   activeFlagNames: string[];
   onWriteToSteamNotice?: (message: string, isSuccess: boolean) => void;
+  onReadFromSteamSuccess?: (launchOptions: string) => void;
 }
 
 export const LiveCommandPreview: React.FC<LiveCommandPreviewProps> = ({
@@ -28,10 +30,12 @@ export const LiveCommandPreview: React.FC<LiveCommandPreviewProps> = ({
   onApplyCommand,
   activeFlagNames,
   onWriteToSteamNotice,
+  onReadFromSteamSuccess,
 }) => {
   const [copied, setCopied] = useState(false);
   const [applied, setApplied] = useState(false);
   const [writingSteam, setWritingSteam] = useState(false);
+  const [readingSteam, setReadingSteam] = useState(false);
   const [showSimulator, setShowSimulator] = useState(false);
 
   const handleCopy = () => {
@@ -67,6 +71,26 @@ export const LiveCommandPreview: React.FC<LiveCommandPreviewProps> = ({
       onWriteToSteamNotice?.('Failed connecting to local Steam writer endpoint.', false);
     } finally {
       setWritingSteam(false);
+    }
+  };
+
+  const handleReadFromSteam = async () => {
+    setReadingSteam(true);
+    try {
+      const res = await fetch(`/api/steam/read-launch-options?appId=${selectedGame.appId}`);
+      const data = await res.json();
+      if (data.success && data.launchOptionsMap && data.launchOptionsMap[selectedGame.appId] !== undefined) {
+        const steamOptions = data.launchOptionsMap[selectedGame.appId];
+        onApplyCommand(steamOptions);
+        onReadFromSteamSuccess?.(steamOptions);
+        onWriteToSteamNotice?.(`Read settings from Steam for ${selectedGame.name}: "${steamOptions || '(Empty)'}"`, true);
+      } else {
+        onWriteToSteamNotice?.(`No existing launch options found in local Steam config for ${selectedGame.name}`, false);
+      }
+    } catch (err) {
+      onWriteToSteamNotice?.('Failed reading settings from local Steam directory.', false);
+    } finally {
+      setReadingSteam(false);
     }
   };
 
@@ -167,6 +191,16 @@ export const LiveCommandPreview: React.FC<LiveCommandPreviewProps> = ({
           >
             {applied ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5 text-cyan-400" />}
             <span>{applied ? 'Saved!' : 'Save Game'}</span>
+          </button>
+
+          <button
+            onClick={handleReadFromSteam}
+            disabled={readingSteam}
+            className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1 transition shadow-md"
+            title="Read current launch options for this game directly from Steam localconfig.vdf"
+          >
+            <DownloadCloud className={`w-3.5 h-3.5 text-cyan-400 ${readingSteam ? 'animate-bounce' : ''}`} />
+            <span>{readingSteam ? 'Reading...' : 'Read from Steam'}</span>
           </button>
 
           <button

@@ -427,6 +427,83 @@ Return ONLY valid JSON without markdown fences if possible.`,
     }
   });
 
+  // Steam Read Launch Options Endpoint (directly reads settings from localconfig.vdf on host)
+  app.get('/api/steam/read-launch-options', (req, res) => {
+    try {
+      const requestedAppId = req.query.appId ? String(req.query.appId) : null;
+      const homeDir = os.homedir();
+
+      const possiblePaths = [
+        path.join(homeDir, '.local/share/Steam'),
+        path.join(homeDir, '.steam/steam'),
+        path.join(homeDir, '.steam/root'),
+        path.join(homeDir, '.var/app/com.valvesoftware.Steam/.local/share/Steam'),
+        '/home/deck/.local/share/Steam',
+        'C:\\Program Files (x86)\\Steam',
+        'C:\\Program Files\\Steam',
+        path.join(homeDir, 'Library/Application Support/Steam'),
+      ];
+
+      const launchOptionsMap: Record<string, string> = {};
+      const readFiles: string[] = [];
+
+      for (const basePath of possiblePaths) {
+        const userDataDir = path.join(basePath, 'userdata');
+        if (fs.existsSync(userDataDir)) {
+          try {
+            const userFolders = fs.readdirSync(userDataDir);
+            for (const userFolder of userFolders) {
+              const localConfigPath = path.join(userDataDir, userFolder, 'config/localconfig.vdf');
+              if (fs.existsSync(localConfigPath)) {
+                try {
+                  const vdfText = fs.readFileSync(localConfigPath, 'utf-8');
+                  readFiles.push(localConfigPath);
+
+                  const appIdRegex = /"(\d+)"\s*\{([^}]*)\}/g;
+                  let match;
+                  while ((match = appIdRegex.exec(vdfText)) !== null) {
+                    const appId = match[1];
+                    const appBody = match[2];
+                    if (!requestedAppId || requestedAppId === appId) {
+                      const launchOptsMatch = appBody.match(/"LaunchOptions"\s*"([^"]*)"/i);
+                      if (launchOptsMatch) {
+                        launchOptionsMap[appId] = launchOptsMatch[1];
+                      }
+                    }
+                  }
+                } catch (err) {
+                  console.warn(`Error reading ${localConfigPath}:`, err);
+                }
+              }
+            }
+          } catch (err) {
+            console.warn(`Error scanning userdata at ${userDataDir}:`, err);
+          }
+        }
+      }
+
+      if (readFiles.length === 0) {
+        return res.json({
+          success: false,
+          message: 'No Steam localconfig.vdf file found on standard system paths.',
+          count: 0,
+          launchOptionsMap: {},
+          readFiles: [],
+        });
+      }
+
+      return res.json({
+        success: true,
+        count: Object.keys(launchOptionsMap).length,
+        launchOptionsMap,
+        readFiles,
+      });
+    } catch (err) {
+      console.error('Read launch options error:', err);
+      return res.status(500).json({ error: 'Failed reading settings from Steam localconfig.vdf' });
+    }
+  });
+
   // Health check endpoint
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', server: 'Proton Launch Options Manager' });

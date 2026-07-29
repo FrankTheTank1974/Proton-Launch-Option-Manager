@@ -103,6 +103,66 @@ export const VdfImportExportModal: React.FC<VdfImportExportModalProps> = ({
     }
   };
 
+  const handleReadDirectFromSteam = async () => {
+    setIsWriting(true);
+    setWriteResult(null);
+
+    try {
+      const res = await fetch('/api/steam/read-launch-options');
+      const data = await res.json();
+
+      if (data.success && data.launchOptionsMap) {
+        const count = Object.keys(data.launchOptionsMap).length;
+        // Merge into parsedApps
+        const updatedApps = parsedApps.map((app) => {
+          if (data.launchOptionsMap[app.appId] !== undefined) {
+            return {
+              ...app,
+              launchOptions: data.launchOptionsMap[app.appId],
+            };
+          }
+          return app;
+        });
+
+        // Add any apps present in Steam but not yet in parsedApps
+        Object.entries(data.launchOptionsMap as Record<string, string>).forEach(([appId, launchOpts]) => {
+          if (!updatedApps.some((a) => a.appId === appId)) {
+            updatedApps.push({
+              appId,
+              appName: `App ${appId}`,
+              launchOptions: launchOpts,
+            });
+          }
+        });
+
+        setParsedApps(updatedApps);
+        setVdfText(generateSampleVdf(games.map((g) => ({
+          appId: g.appId,
+          name: g.name,
+          currentLaunchOptions: data.launchOptionsMap[g.appId.toString()] || g.currentLaunchOptions,
+        }))));
+
+        setWriteResult({
+          type: 'success',
+          message: `Successfully read current settings for ${count} game(s) from local Steam configuration!`,
+        });
+        showToast?.(`Read settings for ${count} game(s) from Steam!`);
+      } else {
+        setWriteResult({
+          type: 'error',
+          message: data.message || 'No local Steam configuration file found to read.',
+        });
+      }
+    } catch (err) {
+      setWriteResult({
+        type: 'error',
+        message: 'Error communicating with local server read service.',
+      });
+    } finally {
+      setIsWriting(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-4xl h-[80vh] flex flex-col shadow-2xl overflow-hidden">
@@ -169,6 +229,16 @@ export const VdfImportExportModal: React.FC<VdfImportExportModalProps> = ({
             >
               <Download className="w-3.5 h-3.5 text-blue-400" />
               <span>Download .vdf</span>
+            </button>
+
+            <button
+              onClick={handleReadDirectFromSteam}
+              disabled={isWriting}
+              className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 border border-slate-700 px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition"
+              title="Read all current launch options directly from local Steam files on your computer"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>Read Directly from Steam</span>
             </button>
 
             <button
