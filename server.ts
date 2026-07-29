@@ -310,6 +310,123 @@ Return ONLY valid JSON without markdown fences if possible.`,
     }
   });
 
+  // Helper to patch LaunchOptions inside localconfig.vdf text
+  function updateLaunchOptionsInVdf(vdfText: string, appIdStr: string, newLaunchOptions: string): string {
+    const appId = String(appIdStr);
+    const escapedOpts = newLaunchOptions.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+
+    // 1. Check if "appId" block exists in VDF
+    const appBlockRegex = new RegExp(`("${appId}")(\\s*\\{)`, 'i');
+
+    if (appBlockRegex.test(vdfText)) {
+      // Search for LaunchOptions under this app block
+      const appLaunchOptionsRegex = new RegExp(`("${appId}"\\s*\\{[^}]*?)("LaunchOptions"\\s*")[^"]*(")`, 'i');
+      if (appLaunchOptionsRegex.test(vdfText)) {
+        return vdfText.replace(appLaunchOptionsRegex, `$1$2${escapedOpts}$3`);
+      } else {
+        return vdfText.replace(appBlockRegex, `$1$2\n\t\t\t\t\t"LaunchOptions"\t\t"${escapedOpts}"`);
+      }
+    } else {
+      // Insert new appId block under "apps"
+      const appsSectionRegex = /("apps"\s*\{)/i;
+      if (appsSectionRegex.test(vdfText)) {
+        const newAppBlock = `$1\n\t\t\t\t"${appId}"\n\t\t\t\t{\n\t\t\t\t\t"LaunchOptions"\t\t"${escapedOpts}"\n\t\t\t\t}`;
+        return vdfText.replace(appsSectionRegex, newAppBlock);
+      } else {
+        const endBraceIndex = vdfText.lastIndexOf('}');
+        if (endBraceIndex !== -1) {
+          const appBlockStr = `\n\t"apps"\n\t{\n\t\t"${appId}"\n\t\t{\n\t\t\t"LaunchOptions"\t\t"${escapedOpts}"\n\t\t}\n\t}\n`;
+          return vdfText.slice(0, endBraceIndex) + appBlockStr + vdfText.slice(endBraceIndex);
+        }
+      }
+    }
+    return vdfText;
+  }
+
+  // Steam Write Launch Options Endpoint (directly writes to localconfig.vdf on host)
+  app.post('/api/steam/write-launch-options', (req, res) => {
+    try {
+      const { appId, launchOptions, updates } = req.body;
+      const homeDir = os.homedir();
+
+      const itemsToUpdate: Array<{ appId: string; launchOptions: string }> = [];
+      if (updates && Array.isArray(updates)) {
+        itemsToUpdate.push(...updates.map((u: any) => ({ appId: String(u.appId), launchOptions: u.launchOptions })));
+      } else if (appId !== undefined) {
+        itemsToUpdate.push({ appId: String(appId), launchOptions: launchOptions || '' });
+      }
+
+      if (itemsToUpdate.length === 0) {
+        return res.status(400).json({ error: 'No appId or launch options provided' });
+      }
+
+      const possiblePaths = [
+        path.join(homeDir, '.local/share/Steam'),
+        path.join(homeDir, '.steam/steam'),
+        path.join(homeDir, '.steam/root'),
+        path.join(homeDir, '.var/app/com.valvesoftware.Steam/.local/share/Steam'),
+        '/home/deck/.local/share/Steam',
+        'C:\\Program Files (x86)\\Steam',
+        'C:\\Program Files\\Steam',
+        path.join(homeDir, 'Library/Application Support/Steam'),
+      ];
+
+      const updatedFiles: string[] = [];
+      const backupFiles: string[] = [];
+
+      for (const basePath of possiblePaths) {
+        const userDataDir = path.join(basePath, 'userdata');
+        if (fs.existsSync(userDataDir)) {
+          try {
+            const userFolders = fs.readdirSync(userDataDir);
+            for (const userFolder of userFolders) {
+              const localConfigPath = path.join(userDataDir, userFolder, 'config/localconfig.vdf');
+              if (fs.existsSync(localConfigPath)) {
+                let vdfContent = fs.readFileSync(localConfigPath, 'utf-8');
+
+                // Create backup
+                const backupPath = path.join(userDataDir, userFolder, 'config/localconfig.vdf.bak');
+                fs.writeFileSync(backupPath, vdfContent, 'utf-8');
+                backupFiles.push(backupPath);
+
+                // Update each item
+                for (const item of itemsToUpdate) {
+                  vdfContent = updateLaunchOptionsInVdf(vdfContent, item.appId, item.launchOptions);
+                }
+
+                // Write back to localconfig.vdf
+                fs.writeFileSync(localConfigPath, vdfContent, 'utf-8');
+                updatedFiles.push(localConfigPath);
+              }
+            }
+          } catch (err) {
+            console.warn(`Error writing to localconfig.vdf in ${userDataDir}:`, err);
+          }
+        }
+      }
+
+      if (updatedFiles.length === 0) {
+        return res.json({
+          success: false,
+          message: 'No local Steam localconfig.vdf file was found on the default system paths. You can still export/download the .vdf file directly.',
+          updatedFiles: [],
+          backupFiles: [],
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: `Successfully wrote launch options directly to ${updatedFiles.length} Steam configuration file(s)!`,
+        updatedFiles,
+        backupFiles,
+        instructions: 'Please restart Steam (or close Steam before applying) so Valve reads the updated localconfig.vdf file.',
+      });
+    } catch (err) {
+      console.error('Write launch options error:', err);
+      return res.status(500).json({ error: 'Failed writing changes to Steam localconfig.vdf' });
+    }
+  });
+
   // Health check endpoint
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', server: 'Proton Launch Options Manager' });

@@ -10,7 +10,8 @@ import {
   Cpu, 
   ShieldCheck, 
   Eye, 
-  Play
+  Play,
+  HardDrive
 } from 'lucide-react';
 
 interface LiveCommandPreviewProps {
@@ -18,6 +19,7 @@ interface LiveCommandPreviewProps {
   selectedGame: SteamGame;
   onApplyCommand: (command: string) => void;
   activeFlagNames: string[];
+  onWriteToSteamNotice?: (message: string, isSuccess: boolean) => void;
 }
 
 export const LiveCommandPreview: React.FC<LiveCommandPreviewProps> = ({
@@ -25,9 +27,11 @@ export const LiveCommandPreview: React.FC<LiveCommandPreviewProps> = ({
   selectedGame,
   onApplyCommand,
   activeFlagNames,
+  onWriteToSteamNotice,
 }) => {
   const [copied, setCopied] = useState(false);
   const [applied, setApplied] = useState(false);
+  const [writingSteam, setWritingSteam] = useState(false);
   const [showSimulator, setShowSimulator] = useState(false);
 
   const handleCopy = () => {
@@ -40,6 +44,30 @@ export const LiveCommandPreview: React.FC<LiveCommandPreviewProps> = ({
     onApplyCommand(commandString);
     setApplied(true);
     setTimeout(() => setApplied(false), 2000);
+  };
+
+  const handleWriteToSteam = async () => {
+    setWritingSteam(true);
+    try {
+      const res = await fetch('/api/steam/write-launch-options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          appId: selectedGame.appId,
+          launchOptions: commandString,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        onWriteToSteamNotice?.(data.message + (data.instructions ? ` ${data.instructions}` : ''), true);
+      } else {
+        onWriteToSteamNotice?.(data.message || 'Steam localconfig.vdf file not found on standard paths.', false);
+      }
+    } catch (err) {
+      onWriteToSteamNotice?.('Failed connecting to local Steam writer endpoint.', false);
+    } finally {
+      setWritingSteam(false);
+    }
   };
 
   // Syntax highlighting parts
@@ -133,12 +161,22 @@ export const LiveCommandPreview: React.FC<LiveCommandPreviewProps> = ({
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1 transition shadow-md ${
               applied
                 ? 'bg-emerald-600 text-white'
-                : 'bg-cyan-600 hover:bg-cyan-500 text-white'
+                : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
             }`}
-            title="Apply command options to selected Steam game"
+            title="Save launch options in manager state"
           >
-            {applied ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
-            <span>{applied ? 'Applied!' : 'Save Game'}</span>
+            {applied ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5 text-cyan-400" />}
+            <span>{applied ? 'Saved!' : 'Save Game'}</span>
+          </button>
+
+          <button
+            onClick={handleWriteToSteam}
+            disabled={writingSteam}
+            className="bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1 transition shadow-md"
+            title="Write launch options directly to Steam localconfig.vdf on disk"
+          >
+            <HardDrive className={`w-3.5 h-3.5 ${writingSteam ? 'animate-spin' : ''}`} />
+            <span>{writingSteam ? 'Writing...' : 'Write to Steam'}</span>
           </button>
         </div>
       </div>

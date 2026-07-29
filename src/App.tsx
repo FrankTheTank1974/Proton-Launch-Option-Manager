@@ -301,6 +301,7 @@ export default function App() {
             selectedGame={selectedGame}
             onApplyCommand={handleApplyCommandToGame}
             activeFlagNames={activeFlagNames}
+            onWriteToSteamNotice={(msg) => showToast(msg)}
           />
 
           {/* Proton Flag Checklist Component */}
@@ -331,6 +332,7 @@ export default function App() {
         onClose={() => setIsVdfSyncOpen(false)}
         games={games}
         onImportVdfGames={handleImportVdfGames}
+        showToast={showToast}
       />
 
       <PresetProfilesModal

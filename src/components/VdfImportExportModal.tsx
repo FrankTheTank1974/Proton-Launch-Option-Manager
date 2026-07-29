@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { parseLocalConfigVdf, updateVdfLaunchOptions, generateSampleVdf } from '../utils/vdfParser';
 import { VdfAppConfig, SteamGame } from '../types';
-import { X, FileText, Upload, Download, CheckCircle2, RefreshCw, Layers } from 'lucide-react';
+import { X, FileText, Upload, Download, CheckCircle2, RefreshCw, Layers, HardDrive, AlertCircle, Sparkles } from 'lucide-react';
 
 interface VdfImportExportModalProps {
   isOpen: boolean;
   onClose: () => void;
   games: SteamGame[];
   onImportVdfGames: (vdfApps: VdfAppConfig[]) => void;
+  showToast?: (msg: string) => void;
 }
 
 export const VdfImportExportModal: React.FC<VdfImportExportModalProps> = ({
@@ -15,10 +16,13 @@ export const VdfImportExportModal: React.FC<VdfImportExportModalProps> = ({
   onClose,
   games,
   onImportVdfGames,
+  showToast,
 }) => {
   const [vdfText, setVdfText] = useState(() => generateSampleVdf(games));
   const [parsedApps, setParsedApps] = useState<VdfAppConfig[]>(() => parseLocalConfigVdf(vdfText));
   const [activeTab, setActiveTab] = useState<'view' | 'edit'>('view');
+  const [isWriting, setIsWriting] = useState(false);
+  const [writeResult, setWriteResult] = useState<{ type: 'success' | 'error'; message: string; instructions?: string } | null>(null);
 
   if (!isOpen) return null;
 
@@ -57,6 +61,46 @@ export const VdfImportExportModal: React.FC<VdfImportExportModalProps> = ({
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const handleWriteDirectToSteam = async () => {
+    setIsWriting(true);
+    setWriteResult(null);
+
+    try {
+      const updates = parsedApps.map((app) => ({
+        appId: app.appId,
+        launchOptions: app.launchOptions || '',
+      }));
+
+      const res = await fetch('/api/steam/write-launch-options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setWriteResult({
+          type: 'success',
+          message: data.message,
+          instructions: data.instructions,
+        });
+        showToast?.('Written directly to Steam configuration!');
+      } else {
+        setWriteResult({
+          type: 'error',
+          message: data.message || 'Could not find local Steam path to update.',
+        });
+      }
+    } catch (err: any) {
+      setWriteResult({
+        type: 'error',
+        message: 'Error communicating with local server write service.',
+      });
+    } finally {
+      setIsWriting(false);
+    }
   };
 
   return (
@@ -121,13 +165,44 @@ export const VdfImportExportModal: React.FC<VdfImportExportModalProps> = ({
 
             <button
               onClick={handleDownloadVdf}
-              className="bg-blue-600 hover:bg-blue-500 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition"
+              className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition"
             >
-              <Download className="w-3.5 h-3.5" />
+              <Download className="w-3.5 h-3.5 text-blue-400" />
               <span>Download .vdf</span>
+            </button>
+
+            <button
+              onClick={handleWriteDirectToSteam}
+              disabled={isWriting}
+              className="bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition shadow-sm"
+              title="Write launch options directly to local Steam files on your computer"
+            >
+              <HardDrive className={`w-3.5 h-3.5 ${isWriting ? 'animate-spin' : ''}`} />
+              <span>Write Directly to Steam</span>
             </button>
           </div>
         </div>
+
+        {/* Status Notice */}
+        {writeResult && (
+          <div className={`px-4 py-2 text-xs flex items-center justify-between border-b ${
+            writeResult.type === 'success'
+              ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/60'
+              : 'bg-amber-950/40 text-amber-300 border-amber-800/60'
+          }`}>
+            <div className="flex items-center space-x-2">
+              {writeResult.type === 'success' ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+              )}
+              <span>{writeResult.message} {writeResult.instructions}</span>
+            </div>
+            <button onClick={() => setWriteResult(null)} className="text-slate-400 hover:text-white text-xs ml-2">
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {/* Content Body */}
         <div className="flex-1 overflow-auto p-4 bg-slate-950">
