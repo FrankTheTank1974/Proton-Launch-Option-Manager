@@ -13,8 +13,8 @@ A modern, full-stack Linux gaming utility built with **React**, **TypeScript**, 
   - **Graphics & Ray Tracing:** NVIDIA DLSS/Reflex, VKD3D-Proton Ray Tracing, AMD FidelityFX, and Vulkan driver flags
   - **Audio & Windowing:** PulseAudio latency adjustments, Wayland/X11 overrides, and Wine debugging controls
 - **⚡ Live Command Preview:** Real-time generation of your exact Steam launch command (`command %command%`) with one-click clipboard copying.
-- **📁 Steam VDF Import/Export:** Directly parse, edit, and export Steam `localconfig.vdf` files to apply or backup custom launch options across your library without editing text files manually.
-- **🖥️ Portable C Code Generator:** Generate standalone C source code wrappers for customized game launchers—perfect for standalone builds, desktop shortcuts, or custom scripts.
+- **📁 Steam VDF Read & Write Integration:** Directly read existing launch options from Steam's `localconfig.vdf` on disk, edit options visually, and write updated settings straight back to your local Steam configuration.
+- **🖥️ Portable C Source Code Generator:** Generate standalone C source code wrappers and GTK3 native utilities for customized game launchers—perfect for standalone builds, desktop shortcuts, or custom system scripts without requiring a web browser.
 - **⚡ Preset Gaming Profiles:** Quickly apply pre-tuned optimization presets tailored for Steam Deck, NVIDIA RTX setups, AMD Radeon rigs, Ultra-Wide displays, and competitive low-latency gaming.
 - **🤖 Gemini AI Assistant:** Integrated AI optimization assistant powered by Google Gemini. Get tailored launch option recommendations based on specific game titles and Linux hardware configurations.
 - **🎮 Game Library Management:** Organize custom launch configurations per game with search, filtering, and profile saving.
@@ -87,6 +87,36 @@ To start the compiled production server:
 
 ```bash
 npm start
+```
+
+---
+
+## 🖥️ What is the "C Source Code" Button Used For?
+
+The **C Source Code** button in the header opens the **Portable Linux C Source Code Generator**. This feature produces complete, standalone C99 source code files (`main.c`, `vdf_parser.c`, `vdf_parser.h`, `Makefile`, `README.md`) that can be compiled natively on any Linux distribution (Arch Linux, SteamOS, Ubuntu, Fedora, Gentoo, Debian).
+
+### 🎯 Primary Use Cases:
+
+1. **Native Offline Launcher Utilities:**
+   - Compiles into a lightweight, native C binary (`proton_mgr`) with zero runtime dependencies.
+   - Allows users to read, update, or clear Steam launch options directly from the Linux terminal or shell scripts without running Node.js or a web browser.
+
+2. **Standalone Game Launch Wrappers:**
+   - Generates game-specific C wrapper programs that inject custom environment variables (`GAMEMODE=1`, `PROTON_ENABLE_NVAPI=1`, `DXVK_HUD=fps`) before launching game binaries.
+   - Great for creating custom `.desktop` application shortcuts or non-Steam game launchers on Steam Deck Desktop Mode.
+
+3. **GTK3 Desktop GUI & Automation:**
+   - Includes optional GTK3 desktop interface code for Linux desktop integration.
+   - Enables hardware power users to bundle game launch profiles into portable ZIP archives (`proton_launch_manager_c_source.zip`) for deployment across multiple Linux gaming setups.
+
+### 🔨 How to Build the Generated C Project:
+
+```bash
+# Compile using GCC with GTK3 support:
+gcc -o proton_mgr main.c vdf_parser.c $(pkg-config --cflags --libs gtk+-3.0)
+
+# Or simply run Makefile:
+make
 ```
 
 ---

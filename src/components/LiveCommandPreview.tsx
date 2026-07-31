@@ -159,17 +159,18 @@ export const LiveCommandPreview: React.FC<LiveCommandPreviewProps> = ({
         </div>
       </div>
 
-      {/* Main Command Box */}
-      <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 relative group">
-        <div className="pr-20 min-h-[42px] flex items-center">
+      {/* Main Command Display Box & Action Toolbar */}
+      <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-3">
+        {/* Command Text Area */}
+        <div className="w-full min-h-[48px] p-3 bg-slate-900/70 border border-slate-800/80 rounded-lg overflow-x-auto flex items-center">
           {renderHighlightedCommand()}
         </div>
 
-        {/* Action Buttons */}
-        <div className="absolute right-2 top-2.5 flex items-center space-x-1.5">
+        {/* Action Buttons Toolbar (No overlay, flex wrap toolbar underneath) */}
+        <div className="flex flex-wrap items-center justify-end gap-2 pt-1 border-t border-slate-800/60">
           <button
             onClick={handleCopy}
-            className={`p-1.5 rounded-lg border text-xs font-medium flex items-center space-x-1 transition shadow-sm ${
+            className={`px-3 py-1.5 rounded-lg border text-xs font-medium flex items-center space-x-1.5 transition shadow-sm ${
               copied
                 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
                 : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
@@ -182,7 +183,7 @@ export const LiveCommandPreview: React.FC<LiveCommandPreviewProps> = ({
 
           <button
             onClick={handleApply}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1 transition shadow-md ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm ${
               applied
                 ? 'bg-emerald-600 text-white'
                 : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
@@ -196,7 +197,7 @@ export const LiveCommandPreview: React.FC<LiveCommandPreviewProps> = ({
           <button
             onClick={handleReadFromSteam}
             disabled={readingSteam}
-            className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1 transition shadow-md"
+            className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm"
             title="Read current launch options for this game directly from Steam localconfig.vdf"
           >
             <DownloadCloud className={`w-3.5 h-3.5 text-cyan-400 ${readingSteam ? 'animate-bounce' : ''}`} />
@@ -206,7 +207,7 @@ export const LiveCommandPreview: React.FC<LiveCommandPreviewProps> = ({
           <button
             onClick={handleWriteToSteam}
             disabled={writingSteam}
-            className="bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1 transition shadow-md"
+            className="bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition shadow-md shadow-cyan-950/40"
             title="Write launch options directly to Steam localconfig.vdf on disk"
           >
             <HardDrive className={`w-3.5 h-3.5 ${writingSteam ? 'animate-spin' : ''}`} />
