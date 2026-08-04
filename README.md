@@ -1,5 +1,11 @@
 # 🐧 Proton Launch Options Manager
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-19-cyan)](https://react.dev/)
+[![Express](https://img.shields.io/badge/Express-4.21-lightgrey)](https://expressjs.com/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-v4-38bdf8)](https://tailwindcss.com/)
+
 A modern, full-stack Linux gaming utility built with **React**, **TypeScript**, **Tailwind CSS**, and **Express**. Designed for Linux gamers, Steam Deck users, and power users to effortlessly customize, test, and generate Steam Proton launch options without memorizing complex environment variables or command-line syntax.
 
 ---
@@ -7,25 +13,34 @@ A modern, full-stack Linux gaming utility built with **React**, **TypeScript**, 
 ## ✨ Features
 
 - **🎛️ Interactive Flag Checklist:** Easily toggle popular Linux gaming performance tools and environment variables:
-  - **Gamescope** (Micro-compositor resolution, upscaling, refresh rates, and FSR/NIS)
-  - **MangoHud** (Performance overlay & FPS capping)
-  - **GameMode** (Feral Interactive CPU/OS optimization daemon)
-  - **Graphics & Ray Tracing:** NVIDIA DLSS/Reflex, VKD3D-Proton Ray Tracing, AMD FidelityFX, and Vulkan driver flags
-  - **Audio & Windowing:** PulseAudio latency adjustments, Wayland/X11 overrides, and Wine debugging controls
-- **⚡ Live Command Preview:** Real-time generation of your exact Steam launch command (`command %command%`) with one-click clipboard copying.
-- **📁 Steam VDF Read & Write Integration:** Directly read existing launch options from Steam's `localconfig.vdf` on disk, edit options visually, and write updated settings straight back to your local Steam configuration.
-- **🖥️ Portable C Source Code Generator:** Generate standalone C source code wrappers and GTK3 native utilities for customized game launchers—perfect for standalone builds, desktop shortcuts, or custom system scripts without requiring a web browser.
-- **⚡ Preset Gaming Profiles:** Quickly apply pre-tuned optimization presets tailored for Steam Deck, NVIDIA RTX setups, AMD Radeon rigs, Ultra-Wide displays, and competitive low-latency gaming.
-- **🤖 Gemini AI Assistant:** Integrated AI optimization assistant powered by Google Gemini. Get tailored launch option recommendations based on specific game titles and Linux hardware configurations.
-- **🎮 Game Library Management:** Organize custom launch configurations per game with search, filtering, and profile saving.
+  - **Gamescope:** Micro-compositor resolution, upscaling (FSR/NIS), refresh rate caps, and window modes.
+  - **MangoHud:** Real-time FPS, CPU/GPU stats overlay, frame timing, and limiter controls.
+  - **GameMode:** Feral Interactive CPU governor and system performance daemon integration.
+  - **Graphics & Ray Tracing:** NVIDIA DLSS, Reflex, NVAPI, VKD3D-Proton Ray Tracing, AMD FidelityFX (FSR), and Vulkan driver flags.
+  - **Audio & Windowing:** PulseAudio latency tuning, Wayland/X11 overrides, DXVK async shaders, and Wine debugging controls.
+- **⚡ Live Command Builder & Toolbar:** Real-time generation of your exact Steam launch command (`command %command%`) with a clean, dedicated action toolbar featuring:
+  - **Copy:** One-click copy to system clipboard.
+  - **Save Game:** Save current flags directly to your game profile in the manager.
+  - **Read from Steam:** Fetch existing launch options directly from Steam's `localconfig.vdf` on disk.
+  - **Write to Steam:** Apply updated launch options straight into Steam's configuration files with automatic `.bak` backups.
+- **📁 Steam VDF Disk Integration:** Scans and interacts directly with local Steam installation directories (`~/.local/share/Steam`, Flatpak, Steam Deck SteamOS `/home/deck/`, Windows, macOS). Reads and writes settings without needing manual file editing.
+- **🖥️ Portable C Source Code Generator:** Generate standalone C99 source code wrappers and GTK3 native utilities for customized game launchers—perfect for standalone builds, desktop shortcuts, or custom system scripts without requiring a web browser.
+- **⚡ Preset Gaming Profiles:** One-click application of pre-tuned profiles:
+  - *Steam Deck Optimized* (720p/800p FSR, battery efficiency)
+  - *NVIDIA RTX Ray Tracing* (NVAPI, DLSS, VKD3D RT)
+  - *AMD Radeon High Performance* (RADV, FSR, GameMode)
+  - *Low Latency Competitive* (Reflex/MangoHud FPS caps)
+  - *Ultra-Wide Display* (Gamescope aspect ratios)
+- **🤖 Gemini AI Assistant:** Integrated AI optimization assistant powered by `@google/genai`. Get tailored launch option recommendations based on specific game titles and Linux hardware configurations.
+- **🎮 Game Library Management:** Search, filter, edit, and organize custom launch configurations per game title.
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Frontend:** React 19, TypeScript, Tailwind CSS v4, Lucide Icons, Framer Motion
-- **Backend:** Express.js (Node.js/ESM) for API routing and secure server-side AI integration
-- **AI Integration:** `@google/genai` SDK
+- **Frontend:** React 19, TypeScript, Tailwind CSS v4, Lucide Icons, Framer Motion, JSZip
+- **Backend:** Express.js (Node.js/ESM) with native ESBuild compilation for standalone execution
+- **AI Integration:** Google Gemini API via `@google/genai` SDK
 - **Build Tooling:** Vite & ESBuild
 
 ---
@@ -93,7 +108,7 @@ npm start
 
 ## 🖥️ What is the "C Source Code" Button Used For?
 
-The **C Source Code** button in the header opens the **Portable Linux C Source Code Generator**. This feature produces complete, standalone C99 source code files (`main.c`, `vdf_parser.c`, `vdf_parser.h`, `Makefile`, `README.md`) that can be compiled natively on any Linux distribution (Arch Linux, SteamOS, Ubuntu, Fedora, Gentoo, Debian).
+The **C Source Code** button in the header opens the **Portable Linux C Source Code Generator**. This feature produces complete, standalone C99 source code files (`main.c`, `vdf_parser.c`, `vdf_parser.h`, `Makefile`, `README.md`) packaged into a downloadable `.zip` file that can be compiled natively on any Linux distribution (Arch Linux, SteamOS, Ubuntu, Fedora, Gentoo, Debian).
 
 ### 🎯 Primary Use Cases:
 
@@ -112,6 +127,10 @@ The **C Source Code** button in the header opens the **Portable Linux C Source C
 ### 🔨 How to Build the Generated C Project:
 
 ```bash
+# Unzip the downloaded generator package:
+unzip proton_launch_manager_c_source.zip
+cd proton_c_launcher
+
 # Compile using GCC with GTK3 support:
 gcc -o proton_mgr main.c vdf_parser.c $(pkg-config --cflags --libs gtk+-3.0)
 
@@ -123,13 +142,15 @@ make
 
 ## 💡 Steam Usage Tip
 
-To use your generated command in Steam:
-1. Open **Steam** and right-click your game in the **Library**.
-2. Select **Properties...**
-3. In the **General** tab, paste the copied command string into the **Launch Options** text field (e.g., `gamemoderun mangohud %command%`).
+To apply your generated command directly in Steam:
+1. Click **Write to Steam** in the manager to write automatically to `localconfig.vdf`, OR:
+2. Open **Steam** and right-click your game in the **Library**.
+3. Select **Properties...**
+4. In the **General** tab, paste the copied command string into the **Launch Options** text field (e.g., `gamemoderun mangohud %command%`).
 
 ---
 
 ## 📄 License
 
-This project is open-source and available under the MIT License.
+This project is licensed under the **MIT License**. See the [LICENSE](./LICENSE) file for full details.
+
