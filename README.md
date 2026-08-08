@@ -23,6 +23,11 @@ A modern, full-stack Linux gaming utility built with **React**, **TypeScript**, 
   - **Save Game:** Save current flags directly to your game profile in the manager.
   - **Read from Steam:** Fetch existing launch options directly from Steam's `localconfig.vdf` on disk.
   - **Write to Steam:** Apply updated launch options straight into Steam's configuration files with automatic `.bak` backups.
+- **🔥 Proton Runner Manager (ProtonUp-Qt Style):** Discover, download, update, and manage custom Steam Proton runner builds directly inside Steam's `compatibilitytools.d` directory:
+  - **GE-Proton (GloriousEggroll):** Latest releases with media codecs (MF/WMA), DXVK patches, and game fixes.
+  - **Proton-CachyOS:** Compiler-optimized builds (x86-64-v3/v4) with LTO and kernel synchronization patches.
+  - **Proton-EM (EchoWolf):** Low-latency and performance-tuned Proton builds.
+  - **Proton-DW (Wine-GE / DirectWay):** Standalone Wine and Direct3D optimized releases.
 - **📁 Steam VDF Disk Integration:** Scans and interacts directly with local Steam installation directories (`~/.local/share/Steam`, Flatpak, Steam Deck SteamOS `/home/deck/`, Windows, macOS). Reads and writes settings without needing manual file editing.
 - **🖥️ Portable C Source Code Generator:** Generate standalone C99 source code wrappers and GTK3 native utilities for customized game launchers—perfect for standalone builds, desktop shortcuts, or custom system scripts without requiring a web browser.
 - **⚡ Preset Gaming Profiles:** One-click application of pre-tuned profiles:

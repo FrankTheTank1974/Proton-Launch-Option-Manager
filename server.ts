@@ -504,6 +504,265 @@ Return ONLY valid JSON without markdown fences if possible.`,
     }
   });
 
+  // ==========================================
+  // CUSTOM PROTON RUNNERS MANAGER ENDPOINTS
+  // (Proton GE, Proton CachyOS, Proton EM, Proton DW)
+  // ==========================================
+
+  // Known Proton runner repositories on GitHub
+  const RUNNER_REPOS: Record<string, { name: string; repo: string; desc: string; icon: string }> = {
+    ge: {
+      name: 'GE-Proton (Proton GE)',
+      repo: 'GloriousEggroll/proton-ge-custom',
+      desc: 'GloriousEggroll build with media codecs (MF/WMA), bleeding-edge Wine patches, and game fixes.',
+      icon: '🔥',
+    },
+    cachyos: {
+      name: 'Proton-CachyOS',
+      repo: 'CachyOS/proton-cachyos',
+      desc: 'CachyOS optimized Proton with x86-64-v3/v4 compiler tweaks, LTO, and kernel sync patches.',
+      icon: '⚡',
+    },
+    em: {
+      name: 'Proton-EM (EM-Proton)',
+      repo: 'EchoWolf/EM-Proton',
+      desc: 'EchoWolf custom Proton build tuned for low latency, extended compatibility, and performance tweaks.',
+      icon: '🐺',
+    },
+    dw: {
+      name: 'Proton-DW / Wine-GE',
+      repo: 'GloriousEggroll/wine-ge-custom',
+      desc: 'DirectWay / Wine-GE Proton variant optimized for standalone Wine, Direct3D, and Wayland games.',
+      icon: '🛠️',
+    },
+  };
+
+  // Helper to query GitHub releases for a repo
+  async function fetchRepoReleases(repoOwnerAndName: string, providerKey: string) {
+    try {
+      const res = await fetch(`https://api.github.com/repos/${repoOwnerAndName}/releases?per_page=8`, {
+        headers: {
+          'User-Agent': 'ProtonLaunchOptionsManager/1.0',
+          'Accept': 'application/vnd.github.v3+json',
+        },
+      });
+      if (!res.ok) {
+        console.warn(`GitHub API ${repoOwnerAndName} status: ${res.status}`);
+        return [];
+      }
+      const data = await res.json();
+      if (!Array.isArray(data)) return [];
+
+      return data.map((rel: any) => {
+        // Find matching release package asset (.tar.gz, .tar.xz, .tar.zst, .zip)
+        const asset = rel.assets?.find((a: any) =>
+          a.name.endsWith('.tar.gz') ||
+          a.name.endsWith('.tar.xz') ||
+          a.name.endsWith('.tar.zst') ||
+          a.name.endsWith('.tar') ||
+          a.name.endsWith('.zip')
+        );
+
+        return {
+          id: rel.id,
+          provider: providerKey,
+          providerName: RUNNER_REPOS[providerKey]?.name || providerKey,
+          tagName: rel.tag_name,
+          title: rel.name || rel.tag_name,
+          publishedAt: rel.published_at,
+          body: rel.body || '',
+          htmlUrl: rel.html_url,
+          repo: repoOwnerAndName,
+          asset: asset ? {
+            name: asset.name,
+            downloadUrl: asset.browser_download_url,
+            sizeBytes: asset.size,
+            downloadCount: asset.download_count,
+          } : null,
+        };
+      });
+    } catch (err) {
+      console.error(`Error fetching releases for ${repoOwnerAndName}:`, err);
+      return [];
+    }
+  }
+
+  // Fetch available Proton releases from GitHub
+  app.get('/api/proton-runners/releases', async (req, res) => {
+    try {
+      const requestedProvider = req.query.provider ? String(req.query.provider).toLowerCase() : 'all';
+
+      let releases: any[] = [];
+
+      if (requestedProvider !== 'all' && RUNNER_REPOS[requestedProvider]) {
+        releases = await fetchRepoReleases(RUNNER_REPOS[requestedProvider].repo, requestedProvider);
+      } else {
+        // Fetch all known providers concurrently
+        const repoPromises = Object.entries(RUNNER_REPOS).map(([key, info]) =>
+          fetchRepoReleases(info.repo, key)
+        );
+        const results = await Promise.all(repoPromises);
+        releases = results.flat();
+      }
+
+      return res.json({
+        success: true,
+        count: releases.length,
+        releases,
+        providers: RUNNER_REPOS,
+      });
+    } catch (err) {
+      console.error('Proton releases API error:', err);
+      return res.status(500).json({ error: 'Failed fetching Proton runner releases' });
+    }
+  });
+
+  // Scan installed Proton compatibility tools on disk
+  app.get('/api/proton-runners/installed', (req, res) => {
+    try {
+      const homeDir = os.homedir();
+      const possibleCompatPaths = [
+        path.join(homeDir, '.local/share/Steam/compatibilitytools.d'),
+        path.join(homeDir, '.steam/root/compatibilitytools.d'),
+        path.join(homeDir, '.steam/steam/compatibilitytools.d'),
+        path.join(homeDir, '.var/app/com.valvesoftware.Steam/.local/share/Steam/compatibilitytools.d'),
+        '/home/deck/.local/share/Steam/compatibilitytools.d',
+      ];
+
+      const installedRunners: any[] = [];
+      const searchedDirs: string[] = [];
+
+      for (const compatDir of possibleCompatPaths) {
+        if (fs.existsSync(compatDir)) {
+          searchedDirs.push(compatDir);
+          try {
+            const items = fs.readdirSync(compatDir, { withFileTypes: true });
+            for (const item of items) {
+              if (item.isDirectory()) {
+                const fullPath = path.join(compatDir, item.name);
+                let displayTitle = item.name;
+
+                const vdfPath = path.join(fullPath, 'compatibilitytool.vdf');
+                if (fs.existsSync(vdfPath)) {
+                  try {
+                    const content = fs.readFileSync(vdfPath, 'utf-8');
+                    const match = content.match(/"display_name"\s*"([^"]+)"/i);
+                    if (match) {
+                      displayTitle = match[1];
+                    }
+                  } catch {}
+                }
+
+                let totalSizeBytes = 0;
+                try {
+                  const files = fs.readdirSync(fullPath);
+                  totalSizeBytes = files.length * 1024 * 512; // approximate directory size
+                } catch {}
+
+                const stat = fs.statSync(fullPath);
+
+                installedRunners.push({
+                  folderName: item.name,
+                  displayTitle,
+                  fullPath,
+                  modifiedTime: stat.mtime,
+                  approxSizeMb: Math.max(120, Math.round(totalSizeBytes / (1024 * 1024))),
+                });
+              }
+            }
+          } catch (err) {
+            console.warn(`Error scanning compat dir ${compatDir}:`, err);
+          }
+        }
+      }
+
+      return res.json({
+        success: true,
+        count: installedRunners.length,
+        installedRunners,
+        searchedDirs,
+      });
+    } catch (err) {
+      console.error('List installed proton runners error:', err);
+      return res.status(500).json({ error: 'Failed scanning installed Proton tools' });
+    }
+  });
+
+  // Download and install a Proton runner archive into compatibilitytools.d
+  app.post('/api/proton-runners/install', async (req, res) => {
+    const { downloadUrl, fileName, runnerName } = req.body;
+    if (!downloadUrl) {
+      return res.status(400).json({ error: 'Missing downloadUrl parameter' });
+    }
+
+    try {
+      const homeDir = os.homedir();
+      const targetCompatDir = path.join(homeDir, '.local/share/Steam/compatibilitytools.d');
+      fs.mkdirSync(targetCompatDir, { recursive: true });
+
+      const safeFileName = fileName || `proton_runner_${Date.now()}.tar.gz`;
+      const tempFilePath = path.join(os.tmpdir(), safeFileName);
+
+      const downloadRes = await fetch(downloadUrl, {
+        headers: { 'User-Agent': 'ProtonLaunchOptionsManager/1.0' },
+      });
+
+      if (!downloadRes.ok) {
+        return res.status(500).json({ error: `Failed downloading release archive: HTTP ${downloadRes.status}` });
+      }
+
+      const buffer = Buffer.from(await downloadRes.arrayBuffer());
+      fs.writeFileSync(tempFilePath, buffer);
+
+      // Extract archive to Steam compatibilitytools.d
+      const { exec } = await import('child_process');
+      const extractCmd = safeFileName.endsWith('.zip')
+        ? `unzip -o "${tempFilePath}" -d "${targetCompatDir}"`
+        : `tar -xf "${tempFilePath}" -C "${targetCompatDir}"`;
+
+      exec(extractCmd, (execErr) => {
+        try { fs.unlinkSync(tempFilePath); } catch {}
+
+        if (execErr) {
+          console.error('Extraction error:', execErr);
+          return res.status(500).json({ error: `Extraction error: ${execErr.message}` });
+        }
+
+        return res.json({
+          success: true,
+          message: `Successfully installed ${runnerName || safeFileName} to ${targetCompatDir}! Please restart Steam to see it in your Game Properties > Compatibility dropdown.`,
+          targetCompatDir,
+        });
+      });
+    } catch (err: any) {
+      console.error('Install proton runner error:', err);
+      return res.status(500).json({ error: err.message || 'Failed downloading and extracting Proton runner' });
+    }
+  });
+
+  // Delete/uninstall an installed Proton runner from compatibilitytools.d
+  app.post('/api/proton-runners/uninstall', (req, res) => {
+    const { fullPath, folderName } = req.body;
+    try {
+      if (!fullPath || !fullPath.includes('compatibilitytools.d')) {
+        return res.status(400).json({ error: 'Invalid or unsafe folder path for uninstall' });
+      }
+
+      if (fs.existsSync(fullPath)) {
+        fs.rmSync(fullPath, { recursive: true, force: true });
+        return res.json({
+          success: true,
+          message: `Successfully removed custom Proton runner "${folderName}" from disk.`,
+        });
+      } else {
+        return res.status(404).json({ error: 'Path not found on system.' });
+      }
+    } catch (err) {
+      console.error('Uninstall proton runner error:', err);
+      return res.status(500).json({ error: 'Failed removing Proton runner from disk' });
+    }
+  });
+
   // Health check endpoint
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', server: 'Proton Launch Options Manager' });

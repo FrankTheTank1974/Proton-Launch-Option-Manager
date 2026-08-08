@@ -13,6 +13,7 @@ import { GeminiAssistantModal } from './components/GeminiAssistantModal';
 import { AddGameModal } from './components/AddGameModal';
 import { ProtonDbModal } from './components/ProtonDbModal';
 import { ScanLocalLibraryModal } from './components/ScanLocalLibraryModal';
+import { ProtonManagerModal } from './components/ProtonManagerModal';
 import { PROTON_FLAGS } from './data/protonFlagsData';
 import { Sparkles, Terminal, Gamepad2, ShieldCheck, CheckCircle2, MessageSquareQuote } from 'lucide-react';
 
@@ -53,6 +54,7 @@ export default function App() {
   const [isProtonDbModalOpen, setIsProtonDbModalOpen] = useState(false);
   const [isAddGameOpen, setIsAddGameOpen] = useState(false);
   const [isScanLocalLibraryOpen, setIsScanLocalLibraryOpen] = useState(false);
+  const [isProtonManagerOpen, setIsProtonManagerOpen] = useState(false);
 
   // Import detected games from local scan or directory picker
   const handleImportLocalGames = (newGames: SteamGame[]) => {
@@ -231,6 +233,7 @@ export default function App() {
         onOpenAIAssistant={() => setIsAIAssistantOpen(true)}
         onOpenAddGame={() => setIsAddGameOpen(true)}
         onOpenScanLocalLibrary={() => setIsScanLocalLibraryOpen(true)}
+        onOpenProtonManager={() => setIsProtonManagerOpen(true)}
       />
 
       {/* Primary Layout Grid */}
@@ -380,6 +383,12 @@ export default function App() {
         isOpen={isScanLocalLibraryOpen}
         onClose={() => setIsScanLocalLibraryOpen(false)}
         onImportGames={handleImportLocalGames}
+      />
+
+      <ProtonManagerModal
+        isOpen={isProtonManagerOpen}
+        onClose={() => setIsProtonManagerOpen(false)}
+        showToast={showToast}
       />
     </div>
   );

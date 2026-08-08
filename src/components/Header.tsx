@@ -20,6 +20,7 @@ interface HeaderProps {
   onOpenAIAssistant: () => void;
   onOpenAddGame: () => void;
   onOpenScanLocalLibrary?: () => void;
+  onOpenProtonManager?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -31,6 +32,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAIAssistant,
   onOpenAddGame,
   onOpenScanLocalLibrary,
+  onOpenProtonManager,
 }) => {
   return (
     <header className="bg-slate-900 border-b border-slate-800 text-white sticky top-0 z-30 shadow-lg">
@@ -87,6 +89,18 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <HardDrive className="w-3.5 h-3.5 text-cyan-400" />
                 <span>Scan Steam Games</span>
+              </button>
+            )}
+
+            {/* Proton Runner Manager */}
+            {onOpenProtonManager && (
+              <button
+                onClick={onOpenProtonManager}
+                className="flex items-center space-x-1.5 bg-amber-950/80 hover:bg-amber-900/90 text-amber-200 border border-amber-700/60 px-3 py-1.5 rounded-lg text-xs font-semibold transition shadow-sm"
+                title="Download and update Proton GE, CachyOS, EM-Proton & DW-Proton versions"
+              >
+                <Flame className="w-3.5 h-3.5 text-amber-400" />
+                <span>Proton Versions</span>
               </button>
             )}
 
