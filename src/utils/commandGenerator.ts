@@ -18,7 +18,7 @@ export function parseCommandString(commandStr: string): CommandState {
       enabledFlags: {},
       customEnvVars: [],
       extraArgs: '',
-      wrapperOrder: ['obs-gamecapture', 'mangohud', 'gamemoderun', 'gamescope'],
+      wrapperOrder: ['obs-gamecapture', 'mangohud', 'gamemoderun', 'game-performance', 'gamescope'],
     };
   }
 
@@ -69,7 +69,7 @@ export function parseCommandString(commandStr: string): CommandState {
     extraArgs,
     wrapperOrder: wrapperOrder.length
       ? wrapperOrder
-      : ['obs-gamecapture', 'mangohud', 'gamemoderun', 'gamescope'],
+      : ['obs-gamecapture', 'mangohud', 'gamemoderun', 'game-performance', 'gamescope'],
   };
 }
 

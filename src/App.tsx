@@ -14,8 +14,10 @@ import { AddGameModal } from './components/AddGameModal';
 import { ProtonDbModal } from './components/ProtonDbModal';
 import { ScanLocalLibraryModal } from './components/ScanLocalLibraryModal';
 import { ProtonManagerModal } from './components/ProtonManagerModal';
+import { BackupModal } from './components/BackupModal';
+import { SteamGridDbModal } from './components/SteamGridDbModal';
 import { PROTON_FLAGS } from './data/protonFlagsData';
-import { Sparkles, Terminal, Gamepad2, ShieldCheck, CheckCircle2, MessageSquareQuote } from 'lucide-react';
+import { Sparkles, Terminal, Gamepad2, ShieldCheck, CheckCircle2, MessageSquareQuote, Image as ImageIcon } from 'lucide-react';
 
 export default function App() {
   const [games, setGames] = useState<SteamGame[]>(INITIAL_STEAM_GAMES);
@@ -55,6 +57,26 @@ export default function App() {
   const [isAddGameOpen, setIsAddGameOpen] = useState(false);
   const [isScanLocalLibraryOpen, setIsScanLocalLibraryOpen] = useState(false);
   const [isProtonManagerOpen, setIsProtonManagerOpen] = useState(false);
+  const [isBackupOpen, setIsBackupOpen] = useState(false);
+  const [isSteamGridDbOpen, setIsSteamGridDbOpen] = useState(false);
+
+  // Restore games from JSON backup
+  const handleImportBackupGames = (importedGames: SteamGame[]) => {
+    setGames(importedGames);
+    if (importedGames.length > 0) {
+      setSelectedGameId(importedGames[0].id);
+      handleSelectGame(importedGames[0]);
+    }
+  };
+
+  // Update custom artwork cover for a game
+  const handleUpdateGameCover = (gameId: string, bannerUrl: string, iconUrl?: string) => {
+    setGames((prev) =>
+      prev.map((g) =>
+        g.id === gameId ? { ...g, bannerUrl, iconUrl: iconUrl || g.iconUrl } : g
+      )
+    );
+  };
 
   // Import detected games from local scan or directory picker
   const handleImportLocalGames = (newGames: SteamGame[]) => {
@@ -234,6 +256,7 @@ export default function App() {
         onOpenAddGame={() => setIsAddGameOpen(true)}
         onOpenScanLocalLibrary={() => setIsScanLocalLibraryOpen(true)}
         onOpenProtonManager={() => setIsProtonManagerOpen(true)}
+        onOpenBackup={() => setIsBackupOpen(true)}
       />
 
       {/* Primary Layout Grid */}
@@ -248,6 +271,10 @@ export default function App() {
             onToggleFavorite={handleToggleFavorite}
             onOpenAddGame={() => setIsAddGameOpen(true)}
             onOpenScanLocalLibrary={() => setIsScanLocalLibraryOpen(true)}
+            onOpenSteamGridDb={(g) => {
+              setSelectedGameId(g.id);
+              setIsSteamGridDbOpen(true);
+            }}
           />
         </div>
 
@@ -257,12 +284,22 @@ export default function App() {
           {/* Currently Selected Game Info Bar */}
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-md">
             <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 rounded-lg overflow-hidden bg-slate-800 flex-shrink-0 border border-slate-700">
+              <div 
+                className="w-12 h-12 rounded-lg overflow-hidden bg-slate-800 flex-shrink-0 border border-slate-700 cursor-pointer relative group/cover"
+                title="Click to edit SteamGridDB artwork"
+                onClick={() => setIsSteamGridDbOpen(true)}
+              >
                 <img
                   src={selectedGame.bannerUrl}
                   alt={selectedGame.name}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover group-hover/cover:scale-105 transition duration-200"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${selectedGame.appId}/header.jpg`;
+                  }}
                 />
+                <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover/cover:opacity-100 flex items-center justify-center transition">
+                  <ImageIcon className="w-4 h-4 text-purple-300" />
+                </div>
               </div>
 
               <div>
@@ -281,6 +318,14 @@ export default function App() {
             </div>
 
             <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setIsSteamGridDbOpen(true)}
+                className="bg-purple-900/40 hover:bg-purple-900/70 text-purple-200 border border-purple-700/50 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm"
+                title="Manage SteamGridDB artwork covers"
+              >
+                <ImageIcon className="w-3.5 h-3.5 text-purple-400" />
+                <span>SteamGridDB Artwork</span>
+              </button>
               <button
                 onClick={() => setIsProtonDbModalOpen(true)}
                 className="bg-amber-900/40 hover:bg-amber-900/70 text-amber-200 border border-amber-700/50 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm"
@@ -388,6 +433,22 @@ export default function App() {
       <ProtonManagerModal
         isOpen={isProtonManagerOpen}
         onClose={() => setIsProtonManagerOpen(false)}
+        showToast={showToast}
+      />
+
+      <BackupModal
+        isOpen={isBackupOpen}
+        onClose={() => setIsBackupOpen(false)}
+        games={games}
+        onImportBackupGames={handleImportBackupGames}
+        showToast={showToast}
+      />
+
+      <SteamGridDbModal
+        isOpen={isSteamGridDbOpen}
+        onClose={() => setIsSteamGridDbOpen(false)}
+        game={selectedGame}
+        onUpdateGameCover={handleUpdateGameCover}
         showToast={showToast}
       />
     </div>

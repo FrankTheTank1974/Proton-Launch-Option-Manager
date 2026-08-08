@@ -8,7 +8,8 @@ import {
   Cpu, 
   Plus, 
   Flame,
-  HardDrive
+  HardDrive,
+  FileJson
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -21,6 +22,7 @@ interface HeaderProps {
   onOpenAddGame: () => void;
   onOpenScanLocalLibrary?: () => void;
   onOpenProtonManager?: () => void;
+  onOpenBackup?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -33,6 +35,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAddGame,
   onOpenScanLocalLibrary,
   onOpenProtonManager,
+  onOpenBackup,
 }) => {
   return (
     <header className="bg-slate-900 border-b border-slate-800 text-white sticky top-0 z-30 shadow-lg">
@@ -123,6 +126,18 @@ export const Header: React.FC<HeaderProps> = ({
               <FileText className="w-3.5 h-3.5 text-blue-400" />
               <span>VDF File</span>
             </button>
+
+            {/* JSON Backup & Restore */}
+            {onOpenBackup && (
+              <button
+                onClick={onOpenBackup}
+                className="flex items-center space-x-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-slate-600 px-3 py-1.5 rounded-lg text-xs font-semibold transition shadow-sm"
+                title="Export or import current state of game launch options as a JSON backup file"
+              >
+                <FileJson className="w-3.5 h-3.5 text-cyan-400" />
+                <span>JSON Backup</span>
+              </button>
+            )}
 
             {/* AI Assistant */}
             <button

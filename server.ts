@@ -310,6 +310,80 @@ Return ONLY valid JSON without markdown fences if possible.`,
     }
   });
 
+  // SteamGridDB Grids API Endpoint
+  app.get('/api/steamgriddb/grids/:appId', async (req, res) => {
+    const { appId } = req.params;
+    const apiKey = (req.query.apiKey as string) || process.env.STEAMGRIDDB_API_KEY;
+
+    if (apiKey) {
+      try {
+        const gameRes = await fetch(`https://www.steamgriddb.com/api/v2/games/steam/${appId}`, {
+          headers: { Authorization: `Bearer ${apiKey}` },
+        });
+        const gameData = await gameRes.json();
+
+        if (gameData.success && gameData.data?.id) {
+          const gameId = gameData.data.id;
+          const gridsRes = await fetch(`https://www.steamgriddb.com/api/v2/grids/game/${gameId}`, {
+            headers: { Authorization: `Bearer ${apiKey}` },
+          });
+          const gridsData = await gridsRes.json();
+
+          if (gridsData.success && Array.isArray(gridsData.data)) {
+            return res.json({
+              success: true,
+              source: 'steamgriddb',
+              grids: gridsData.data.slice(0, 12).map((g: any) => ({
+                id: String(g.id),
+                url: g.url,
+                thumb: g.thumb || g.url,
+                score: g.score,
+                author: g.author?.name || 'SteamGridDB Creator',
+                style: g.style,
+                label: `SteamGridDB Grid (${g.width}x${g.height} - Score: ${g.score || 0})`,
+              })),
+            });
+          }
+        }
+      } catch (err) {
+        console.error('SteamGridDB API call failed:', err);
+      }
+    }
+
+    // Default Fallback: Steam CDN high-res vertical and horizontal grids
+    return res.json({
+      success: true,
+      source: 'steam_cdn',
+      grids: [
+        {
+          id: 'steam_library_600x900',
+          url: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/library_600x900_2x.jpg`,
+          thumb: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/library_600x900_2x.jpg`,
+          label: 'Steam Official Library Grid (Vertical 2:3)',
+        },
+        {
+          id: 'steam_header',
+          url: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
+          thumb: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
+          label: 'Steam Official Header (Wide)',
+        },
+        {
+          id: 'steam_hero',
+          url: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/library_hero.jpg`,
+          thumb: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/library_hero.jpg`,
+          label: 'Steam Official Hero Banner',
+        },
+        {
+          id: 'steam_capsule',
+          url: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/capsule_616x353.jpg`,
+          thumb: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/capsule_616x353.jpg`,
+          label: 'Steam Official Capsule Art',
+        },
+      ],
+      steamGridDbUrl: `https://www.steamgriddb.com/search/grids?term=${appId}`,
+    });
+  });
+
   // Helper to patch LaunchOptions inside localconfig.vdf text
   function updateLaunchOptionsInVdf(vdfText: string, appIdStr: string, newLaunchOptions: string): string {
     const appId = String(appIdStr);
@@ -524,9 +598,9 @@ Return ONLY valid JSON without markdown fences if possible.`,
       icon: '⚡',
     },
     em: {
-      name: 'Proton-EM (EM-Proton)',
-      repo: 'EchoWolf/EM-Proton',
-      desc: 'EchoWolf custom Proton build tuned for low latency, extended compatibility, and performance tweaks.',
+      name: 'Proton-EM (Etaash Mathamsetty Proton)',
+      repo: 'Etaash-mathamsetty/Proton',
+      desc: 'Proton-EM build by Etaash Mathamsetty with performance optimizations, custom Wine patches, and game fixes.',
       icon: '🐺',
     },
     dw: {
@@ -554,14 +628,17 @@ Return ONLY valid JSON without markdown fences if possible.`,
       if (!Array.isArray(data)) return [];
 
       return data.map((rel: any) => {
-        // Find matching release package asset (.tar.gz, .tar.xz, .tar.zst, .zip)
+        // Find matching release package asset (.tar.gz, .tar.xz, .tar.zst, .tar.bz2, .zip, etc.)
         const asset = rel.assets?.find((a: any) =>
           a.name.endsWith('.tar.gz') ||
           a.name.endsWith('.tar.xz') ||
           a.name.endsWith('.tar.zst') ||
+          a.name.endsWith('.tar.bz2') ||
           a.name.endsWith('.tar') ||
-          a.name.endsWith('.zip')
-        );
+          a.name.endsWith('.zip') ||
+          a.name.endsWith('.7z') ||
+          a.name.includes('.tar.')
+        ) || rel.assets?.[0];
 
         return {
           id: rel.id,

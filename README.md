@@ -15,8 +15,9 @@ A modern, full-stack Linux gaming utility built with **React**, **TypeScript**, 
 - **🎛️ Interactive Flag Checklist:** Easily toggle popular Linux gaming performance tools and environment variables:
   - **Gamescope:** Micro-compositor resolution, upscaling (FSR/NIS), refresh rate caps, and window modes.
   - **MangoHud:** Real-time FPS, CPU/GPU stats overlay, frame timing, and limiter controls.
-  - **GameMode:** Feral Interactive CPU governor and system performance daemon integration.
+  - **GameMode & CachyOS `game-performance`:** Feral Interactive GameMode daemon integration and native CachyOS `game-performance` wrapper script support (`cachyos-settings`).
   - **Graphics & Ray Tracing:** NVIDIA DLSS, Reflex, NVAPI, VKD3D-Proton Ray Tracing, AMD FidelityFX (FSR), and Vulkan driver flags.
+  - **lsfg-vk Frame Generation:** Full support for PancakeTAS Lossless Scaling Frame Generation Vulkan layer (`ENABLE_LSFG=1`, `LSFGVK_MULTIPLIER=2/3/4`, `LSFGVK_PERFORMANCE_MODE`, `LSFGVK_FLOW_SCALE`).
   - **Audio & Windowing:** PulseAudio latency tuning, Wayland/X11 overrides, DXVK async shaders, and Wine debugging controls.
 - **⚡ Live Command Builder & Toolbar:** Real-time generation of your exact Steam launch command (`command %command%`) with a clean, dedicated action toolbar featuring:
   - **Copy:** One-click copy to system clipboard.
@@ -26,7 +27,7 @@ A modern, full-stack Linux gaming utility built with **React**, **TypeScript**, 
 - **🔥 Proton Runner Manager (ProtonUp-Qt Style):** Discover, download, update, and manage custom Steam Proton runner builds directly inside Steam's `compatibilitytools.d` directory:
   - **GE-Proton (GloriousEggroll):** Latest releases with media codecs (MF/WMA), DXVK patches, and game fixes.
   - **Proton-CachyOS:** Compiler-optimized builds (x86-64-v3/v4) with LTO and kernel synchronization patches.
-  - **Proton-EM (EchoWolf):** Low-latency and performance-tuned Proton builds.
+  - **Proton-EM (Etaash Mathamsetty):** Custom Proton build with performance optimizations and Wine patches.
   - **Proton-DW (Wine-GE / DirectWay):** Standalone Wine and Direct3D optimized releases.
 - **📁 Steam VDF Disk Integration:** Scans and interacts directly with local Steam installation directories (`~/.local/share/Steam`, Flatpak, Steam Deck SteamOS `/home/deck/`, Windows, macOS). Reads and writes settings without needing manual file editing.
 - **🖥️ Portable C Source Code Generator:** Generate standalone C99 source code wrappers and GTK3 native utilities for customized game launchers—perfect for standalone builds, desktop shortcuts, or custom system scripts without requiring a web browser.

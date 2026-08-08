@@ -35,9 +35,11 @@ static ProtonFlag g_flags[] = {
     {"PROTON_USE_NTSYNC", "PROTON_USE_NTSYNC=1", false, 0, false, NULL},
     {"DISABLE_SHADER_CACHE", "DISABLE_SHADER_CACHE=1", false, 0, false, NULL},
     {"gamemoderun (GameMode)", "gamemoderun", true, 2, false, NULL},
+    {"game-performance (CachyOS)", "game-performance", true, 2, false, NULL},
     {"lsvk (VKD3D Ray Tracing)", "VKD3D_CONFIG=dxr11,dxr", false, 0, false, NULL},
     {"mangohud (FPS Overlay)", "mangohud", true, 1, false, NULL},
     {"ENABLE_NVAPI (DLSS/Reflex)", "PROTON_ENABLE_NVAPI=1", false, 0, false, NULL},
+    {"lsfg-vk (Lossless Scaling)", "ENABLE_LSFG=1 LSFGVK_MULTIPLIER=2", false, 0, false, NULL},
     {"Gamescope Compositor", "gamescope -w 1920 -h 1080 -r 144 -f --", true, 3, false, NULL},
     {"PROTON_LOG (Debugging)", "PROTON_LOG=1", false, 0, false, NULL}
 };

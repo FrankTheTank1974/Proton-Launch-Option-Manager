@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { SteamGame } from '../types';
-import { Search, Star, Gamepad2, Layers, CheckCircle2, Plus, HardDrive } from 'lucide-react';
+import { Search, Star, Gamepad2, Layers, CheckCircle2, Plus, HardDrive, Image as ImageIcon } from 'lucide-react';
 
 interface GameLibraryListProps {
   games: SteamGame[];
@@ -9,6 +9,7 @@ interface GameLibraryListProps {
   onToggleFavorite: (id: string) => void;
   onOpenAddGame: () => void;
   onOpenScanLocalLibrary?: () => void;
+  onOpenSteamGridDb?: (game: SteamGame) => void;
 }
 
 export const GameLibraryList: React.FC<GameLibraryListProps> = ({
@@ -18,6 +19,7 @@ export const GameLibraryList: React.FC<GameLibraryListProps> = ({
   onToggleFavorite,
   onOpenAddGame,
   onOpenScanLocalLibrary,
+  onOpenSteamGridDb,
 }) => {
   const [search, setSearch] = useState('');
   const [filterFavorite, setFilterFavorite] = useState(false);
@@ -113,16 +115,27 @@ export const GameLibraryList: React.FC<GameLibraryListProps> = ({
                 }`}
               >
                 {/* Game Thumbnail / Icon */}
-                <div className="w-10 h-10 rounded-md overflow-hidden bg-slate-800 flex-shrink-0 mr-2.5 relative border border-slate-700/50">
+                <div 
+                  className="w-10 h-10 rounded-md overflow-hidden bg-slate-800 flex-shrink-0 mr-2.5 relative border border-slate-700/50 group/thumb"
+                  title="Click to manage artwork from SteamGridDB"
+                  onClick={(e) => {
+                    if (onOpenSteamGridDb) {
+                      e.stopPropagation();
+                      onOpenSteamGridDb(game);
+                    }
+                  }}
+                >
                   <img
                     src={game.bannerUrl}
                     alt={game.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                     onError={(e) => {
-                      (e.target as HTMLElement).style.display = 'none';
+                      (e.target as HTMLImageElement).src = `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${game.appId}/header.jpg`;
                     }}
                   />
-                  <div className="absolute inset-0 bg-slate-900/20" />
+                  <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover/thumb:opacity-100 flex items-center justify-center transition">
+                    <ImageIcon className="w-4 h-4 text-purple-300" />
+                  </div>
                 </div>
 
                 {/* Game Details */}

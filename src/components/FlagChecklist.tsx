@@ -99,9 +99,11 @@ export const FlagChecklist: React.FC<FlagChecklistProps> = ({
             'proton_use_ntsync',
             'disable_shader_cache',
             'gamemoderun',
+            'game_performance',
             'lsvk_vkd3d',
             'mangohud',
             'enable_nvapi',
+            'enable_lsfg',
           ].includes(flag.id);
 
           return (
