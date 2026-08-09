@@ -213,6 +213,8 @@ int main(int argc, char *argv[]) {
 #define VDF_PARSER_H
 
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdio.h>
 
 typedef struct {
     int app_id;
@@ -271,7 +273,7 @@ bool vdf_get_launch_options(const char *vdf_filepath, int app_id, char *out_opti
 
     char line[1024];
     char target_app[64];
-    snprintf(target_app, sizeof(target_app), "\"%d\"", app_id);
+    snprintf(target_app, sizeof(target_app), "\"\\\"%d\\\"\"", app_id);
     bool inside_app = false;
 
     while (fgets(line, sizeof(line), fp)) {
@@ -280,8 +282,8 @@ bool vdf_get_launch_options(const char *vdf_filepath, int app_id, char *out_opti
             continue;
         }
 
-        if (inside_app && strstr(line, "\"LaunchOptions\"")) {
-            char *start = strchr(line + strlen("\"LaunchOptions\""), '"');
+        if (inside_app && strstr(line, "\"\\\"LaunchOptions\\\"\"")) {
+            char *start = strchr(line + strlen("\"\\\"LaunchOptions\\\"\""), '"');
             if (start) {
                 start++;
                 char *end = strchr(start, '"');
@@ -305,6 +307,9 @@ bool vdf_get_launch_options(const char *vdf_filepath, int app_id, char *out_opti
 }
 
 bool vdf_update_launch_options(const char *vdf_filepath, int app_id, const char *new_options) {
+    (void)app_id;
+    (void)new_options;
+
     // Basic backup and rewrite algorithm
     char backup_path[1024];
     snprintf(backup_path, sizeof(backup_path), "%s.bak", vdf_filepath);
