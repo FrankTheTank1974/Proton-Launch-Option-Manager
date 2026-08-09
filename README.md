@@ -67,6 +67,26 @@ cd proton-launch-options-manager
 npm install
 ```
 
+#### ⚠️ Note on `npm install` Warnings & Blocked Install Scripts
+
+When running `npm install`, modern versions of `npm` (npm v10+) may display warnings about blocked lifecycle scripts or deprecated sub-dependencies:
+
+```text
+npm warn deprecated node-domexception@1.0.0
+npm warn install-scripts 4 packages had install scripts blocked because they are not covered by allowScripts:
+npm warn install-scripts   @google/genai (preinstall: echo 'preinstall: no-op')
+npm warn install-scripts   esbuild (postinstall: node install.js)
+npm warn install-scripts   protobufjs (postinstall: node scripts/postinstall)
+```
+
+- **`node-domexception` / `npm fund` warnings:** These are standard informational notices from transitive dependencies and can be safely ignored.
+- **Blocked install scripts (`esbuild`, `@google/genai`, etc.):** NPM blocks post-install scripts by default for security. The application will function normally in most cases. If `esbuild` fails to locate its native binary during `npm run build` or `npm run dev`, simply run:
+  ```bash
+  npm rebuild esbuild
+  # Or approve install scripts:
+  npm install-scripts approve esbuild
+  ```
+
 ### 3. Environment Variables
 
 Create a `.env` file in the root directory by copying the example file:
