@@ -8,17 +8,49 @@ echo "=================================================="
 echo " 🎮 Starting Proton Launch Options Manager"
 echo "=================================================="
 
-# 1. Install dependencies if missing
-if [ ! -d "node_modules" ]; then
+REINSTALL_REQUIRED=false
+
+# 1. Check for GitHub updates if this is a Git repository
+if [ -d ".git" ] && command -v git >/dev/null 2>&1; then
+  echo "🔍 Checking for updates from GitHub..."
+  if git fetch origin >/dev/null 2>&1; then
+    CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "main")
+    LOCAL_HASH=$(git rev-parse HEAD 2>/dev/null || true)
+    REMOTE_HASH=$(git rev-parse "origin/${CURRENT_BRANCH}" 2>/dev/null || true)
+
+    if [ -n "$LOCAL_HASH" ] && [ -n "$REMOTE_HASH" ] && [ "$LOCAL_HASH" != "$REMOTE_HASH" ]; then
+      echo "🔄 New update found on GitHub! Pulling latest changes..."
+      HAS_CHANGES=$(git status --porcelain 2>/dev/null || true)
+      if [ -n "$HAS_CHANGES" ]; then
+        echo "⚠️ Local uncommitted changes detected. Stashing local changes before update..."
+        git stash save "Auto-stashed before start.sh update" >/dev/null 2>&1 || true
+      fi
+
+      if git pull origin "$CURRENT_BRANCH"; then
+        echo "✅ Updated to latest version from GitHub!"
+        REINSTALL_REQUIRED=true
+      else
+        echo "⚠️ Git pull failed. Continuing with local version."
+      fi
+    else
+      echo "✅ Repository is up to date."
+    fi
+  else
+    echo "ℹ️ Unable to reach GitHub remote or fetch updates. Skipping update check."
+  fi
+fi
+
+# 2. Install dependencies if missing or after update
+if [ ! -d "node_modules" ] || [ "$REINSTALL_REQUIRED" = true ]; then
   echo "📦 Installing dependencies..."
   npm install
 fi
 
-# 2. Build production assets & server
+# 3. Build production assets & server
 echo "🔨 Building production distribution..."
 npm run build
 
-# 3. Helper function to open default system browser
+# 4. Helper function to open default system browser
 open_browser() {
   # Wait for server to boot up
   sleep 1.5
@@ -39,6 +71,6 @@ open_browser() {
 # Launch browser in background task
 open_browser &
 
-# 4. Start Node.js server
+# 5. Start Node.js server
 echo "🚀 Application running at ${APP_URL}"
 npm start

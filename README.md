@@ -115,10 +115,11 @@ npm run launch
 ```
 
 This script will:
-1. Verify and install npm dependencies if needed.
-2. Build the frontend assets and Express backend bundle.
-3. Automatically launch `http://localhost:3000` in your default system browser (`xdg-open`, `open`, `wslview`, or Windows default browser).
-4. Start the Node.js production server.
+1. **Auto-check GitHub for updates:** If run inside a Git repository, it fetches `origin`, stashes local edits if necessary, and automatically pulls the latest changes before building.
+2. Verify and install/update npm dependencies if required.
+3. Build the frontend assets and Express backend bundle.
+4. Automatically launch `http://localhost:3000` in your default system browser (`xdg-open`, `open`, `wslview`, or Windows default browser).
+5. Start the Node.js production server.
 
 ---
 
