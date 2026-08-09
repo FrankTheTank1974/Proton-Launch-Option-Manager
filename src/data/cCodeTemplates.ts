@@ -177,6 +177,32 @@ static void on_save_vdf_clicked(GtkWidget *btn, gpointer user_data) {
     gtk_widget_destroy(dialog);
 }
 
+/* Embedded 16x16 XPM Taskbar Icon */
+static const char *app_icon_xpm[] = {
+"16 16 5 1",
+"  c None",
+". c #1b2838",
+"+ c #a855f7",
+"@ c #06b6d4",
+"# c #66c0f4",
+"   ..........   ",
+"  .++######++.  ",
+" .+#@@@@@@@@#+. ",
+".+#@@......@@#+.",
+".+@@..+@@+..@@+.",
+".+@..+####+..@+.",
+".+@..#@..@#..@+.",
+".+@..#@..@#..@+.",
+".+@..+####+..@+.",
+".+@@..+@@+..@@+.",
+".+#@@......@@#+.",
+" .+#@@@@@@@@#+. ",
+"  .++######++.  ",
+"   ..........   ",
+"                ",
+"                "
+};
+
 int main(int argc, char *argv[]) {
     gtk_init(&argc, &argv);
 
@@ -201,6 +227,15 @@ int main(int argc, char *argv[]) {
     gtk_window_set_title(GTK_WINDOW(window), "Linux Steam Proton Launch Options Manager (C)");
     gtk_window_set_default_size(GTK_WINDOW(window), 720, 560);
     gtk_container_set_border_width(GTK_CONTAINER(window), 16);
+
+    // Set GTK Taskbar / Window Icon (from embedded XPM with fallback to system steam icon)
+    GdkPixbuf *icon_pixbuf = gdk_pixbuf_new_from_xpm_data(app_icon_xpm);
+    if (icon_pixbuf) {
+        gtk_window_set_icon(GTK_WINDOW(window), icon_pixbuf);
+        g_object_unref(icon_pixbuf);
+    } else {
+        gtk_window_set_icon_name(GTK_WINDOW(window), "steam");
+    }
 
     g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 

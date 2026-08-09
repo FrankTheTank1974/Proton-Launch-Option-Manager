@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1b2838"/>
+      <stop offset="100%" stop-color="#0a0f18"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a855f7"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+    <linearGradient id="steamGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#66c0f4"/>
+      <stop offset="100%" stop-color="#1b2838"/>
+    </linearGradient>
+  </defs>
+  <!-- Outer Rounded Square -->
+  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#bgGrad)" stroke="#38be23" stroke-opacity="0.3" stroke-width="1.5"/>
+  
+  <!-- Proton Ring -->
+  <circle cx="32" cy="32" r="22" fill="none" stroke="url(#accentGrad)" stroke-width="3" stroke-dasharray="100 15" transform="rotate(-30 32 32)"/>
+  <circle cx="32" cy="32" r="15" fill="none" stroke="url(#accentGrad)" stroke-width="1.5" stroke-dasharray="60 10" opacity="0.6"/>
+
+  <!-- Center Steam Piston / Rocket -->
+  <path d="M22 42 L32 20 L42 42 L32 36 Z" fill="url(#steamGrad)" stroke="#66c0f4" stroke-width="1"/>
+  <circle cx="32" cy="25" r="4" fill="#a855f7"/>
+  <circle cx="24" cy="40" r="3" fill="#06b6d4"/>
+  <circle cx="40" cy="40" r="3" fill="#06b6d4"/>
+</svg>
