@@ -21,6 +21,7 @@ interface CCodeGeneratorModalProps {
   onClose: () => void;
   selectedGame: SteamGame;
   currentCommand: string;
+  games?: SteamGame[];
 }
 
 export const CCodeGeneratorModal: React.FC<CCodeGeneratorModalProps> = ({
@@ -28,6 +29,7 @@ export const CCodeGeneratorModal: React.FC<CCodeGeneratorModalProps> = ({
   onClose,
   selectedGame,
   currentCommand,
+  games = [],
 }) => {
   const [activeFileIndex, setActiveFileIndex] = useState(0);
   const [copied, setCopied] = useState(false);
@@ -35,7 +37,7 @@ export const CCodeGeneratorModal: React.FC<CCodeGeneratorModalProps> = ({
 
   if (!isOpen) return null;
 
-  const cFiles = getCCodeTemplates(selectedGame.name, selectedGame.appId, currentCommand);
+  const cFiles = getCCodeTemplates(selectedGame.name, selectedGame.appId, currentCommand, games);
   const currentFile = cFiles[activeFileIndex];
 
   const handleCopy = () => {

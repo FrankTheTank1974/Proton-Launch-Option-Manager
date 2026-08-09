@@ -398,6 +398,7 @@ export default function App() {
         onClose={() => setIsCCodeOpen(false)}
         selectedGame={selectedGame}
         currentCommand={currentCommandString}
+        games={games}
       />
 
       <VdfImportExportModal

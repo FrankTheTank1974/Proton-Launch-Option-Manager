@@ -1,11 +1,31 @@
-import { CSourceFile } from '../types';
+import { CSourceFile, SteamGame } from '../types';
+import { INITIAL_STEAM_GAMES } from './steamGamesData';
 
-export function getCCodeTemplates(selectedGameName: string, selectedAppId: number, currentCommand: string): CSourceFile[] {
+export function getCCodeTemplates(selectedGameName: string, selectedAppId: number, currentCommand: string, gamesList: SteamGame[] = []): CSourceFile[] {
+  const gamesToUse = gamesList.length > 0 ? [...gamesList] : [...INITIAL_STEAM_GAMES];
+  
+  if (!gamesToUse.some(g => g.appId === selectedAppId)) {
+    gamesToUse.unshift({
+      id: `app_${selectedAppId}`,
+      appId: selectedAppId,
+      name: selectedGameName,
+      bannerUrl: '',
+      iconUrl: '',
+      protonVersion: 'Proton Experimental',
+      currentLaunchOptions: currentCommand,
+      lastUpdated: '',
+      isFavorite: false,
+      developer: '',
+    });
+  }
+
+  const initialGameArray = gamesToUse.map(g => `    { "${g.name.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}", ${g.appId} }`).join(',\n');
+
   return [
     {
       filename: 'main.c',
       language: 'c',
-      description: 'Main GTK3 / Linux C application entry point with toggle checklist and live preview',
+      description: 'Main GTK3 / Linux C application entry point with game selector dropdown and live preview',
       content: `/*
  * Proton Launch Options Manager for Steam Library on Linux
  * Language: C99 / GTK+3
@@ -17,6 +37,7 @@ export function getCCodeTemplates(selectedGameName: string, selectedAppId: numbe
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include "vdf_parser.h"
 
 #define MAX_CMD_LEN 2048
 #define MAX_GAME_NAME 256
@@ -47,8 +68,17 @@ static ProtonFlag g_flags[] = {
 static const int NUM_FLAGS = sizeof(g_flags) / sizeof(g_flags[0]);
 
 static GtkWidget *g_preview_entry;
+static GtkWidget *g_game_combo;
+static GtkWidget *g_game_info_lbl;
 static char g_custom_args[512] = "-novid -high";
-static int g_current_appid = ${selectedAppId};
+
+static SteamGameInfo g_library_games[128] = {
+\${initialGameArray}
+};
+static int g_num_games = \${gamesToUse.length};
+
+static int g_current_appid = \${selectedAppId};
+static char g_current_gamename[128] = "\${selectedGameName.replace(/\\\\/g, '\\\\\\\\').replace(/"/g, '\\\\"')}";
 
 void build_command_string(char *out_buf, size_t max_len) {
     char env_vars[1024] = "";
@@ -91,6 +121,19 @@ static void on_flag_toggled(GtkToggleButton *btn, gpointer user_data) {
     gtk_entry_set_text(GTK_ENTRY(g_preview_entry), full_cmd);
 }
 
+static void on_game_changed(GtkComboBoxText *combo, gpointer user_data) {
+    (void)user_data;
+    gint idx = gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
+    if (idx >= 0 && idx < g_num_games) {
+        g_current_appid = g_library_games[idx].app_id;
+        strncpy(g_current_gamename, g_library_games[idx].name, sizeof(g_current_gamename) - 1);
+
+        char info_str[256];
+        snprintf(info_str, sizeof(info_str), "Target Game: <b>%s</b> | AppID: <b>%d</b>", g_current_gamename, g_current_appid);
+        gtk_label_set_markup(GTK_LABEL(g_game_info_lbl), info_str);
+    }
+}
+
 static void on_copy_clicked(GtkWidget *btn, gpointer user_data) {
     (void)btn;
     (void)user_data;
@@ -100,7 +143,8 @@ static void on_copy_clicked(GtkWidget *btn, gpointer user_data) {
 
     GtkWidget *dialog = gtk_message_dialog_new(NULL, GTK_DIALOG_MODAL, GTK_MESSAGE_INFO,
                                                GTK_BUTTONS_OK,
-                                               "Copied launch command to clipboard!\\n\\n%s", text);
+                                               "Copied launch command for '%s' (AppID %d) to clipboard!\\n\\n%s",
+                                               g_current_gamename, g_current_appid, text);
     gtk_dialog_run(GTK_DIALOG(dialog));
     gtk_widget_destroy(dialog);
 }
@@ -111,12 +155,24 @@ static void on_save_vdf_clicked(GtkWidget *btn, gpointer user_data) {
     char full_cmd[MAX_CMD_LEN];
     build_command_string(full_cmd, sizeof(full_cmd));
 
-    printf("Saving launch command for AppID %d:\\n%s\\n", g_current_appid, full_cmd);
-    
+    char vdf_path[1024];
+    if (find_steam_vdf_path(vdf_path, sizeof(vdf_path))) {
+        bool ok = vdf_update_launch_options(vdf_path, g_current_appid, full_cmd);
+        if (ok) {
+            GtkWidget *dialog = gtk_message_dialog_new(NULL, GTK_DIALOG_MODAL, GTK_MESSAGE_INFO,
+                                                       GTK_BUTTONS_OK,
+                                                       "Successfully updated Steam VDF config for '%s' (AppID %d)!\\n\\nCommand: %s",
+                                                       g_current_gamename, g_current_appid, full_cmd);
+            gtk_dialog_run(GTK_DIALOG(dialog));
+            gtk_widget_destroy(dialog);
+            return;
+        }
+    }
+
     GtkWidget *dialog = gtk_message_dialog_new(NULL, GTK_DIALOG_MODAL, GTK_MESSAGE_INFO,
                                                GTK_BUTTONS_OK,
-                                               "Successfully saved Proton options for AppID %d!\\nCommand: %s",
-                                               g_current_appid, full_cmd);
+                                               "Saved Proton launch options for '%s' (AppID %d)!\\n\\nCommand:\\n%s",
+                                               g_current_gamename, g_current_appid, full_cmd);
     gtk_dialog_run(GTK_DIALOG(dialog));
     gtk_widget_destroy(dialog);
 }
@@ -124,9 +180,26 @@ static void on_save_vdf_clicked(GtkWidget *btn, gpointer user_data) {
 int main(int argc, char *argv[]) {
     gtk_init(&argc, &argv);
 
+    // Auto-detect installed games from local Steam library folders
+    SteamGameInfo scanned[64];
+    int scanned_cnt = scan_installed_steam_games(scanned, 64);
+    for (int i = 0; i < scanned_cnt; i++) {
+        bool exists = false;
+        for (int j = 0; j < g_num_games; j++) {
+            if (g_library_games[j].app_id == scanned[i].app_id) {
+                exists = true;
+                break;
+            }
+        }
+        if (!exists && g_num_games < 128) {
+            g_library_games[g_num_games] = scanned[i];
+            g_num_games++;
+        }
+    }
+
     GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(window), "Linux Steam Proton Launch Options Manager (C)");
-    gtk_window_set_default_size(GTK_WINDOW(window), 680, 520);
+    gtk_window_set_default_size(GTK_WINDOW(window), 720, 560);
     gtk_container_set_border_width(GTK_CONTAINER(window), 16);
 
     g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
@@ -139,11 +212,37 @@ int main(int argc, char *argv[]) {
     gtk_label_set_markup(GTK_LABEL(title), "<b><span size='large'>Proton Launch Options Checklist</span></b>");
     gtk_box_pack_start(GTK_BOX(main_vbox), title, FALSE, FALSE, 0);
 
-    // Game Info Box
-    char info_str[128];
-    snprintf(info_str, sizeof(info_str), "Target Title: %s (AppID: %d)", "${selectedGameName}", g_current_appid);
-    GtkWidget *game_lbl = gtk_label_new(info_str);
-    gtk_box_pack_start(GTK_BOX(main_vbox), game_lbl, FALSE, FALSE, 0);
+    // Game Selector Box
+    GtkWidget *game_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
+    gtk_box_pack_start(GTK_BOX(main_vbox), game_box, FALSE, FALSE, 0);
+
+    GtkWidget *combo_lbl = gtk_label_new("Select Steam Game:");
+    gtk_box_pack_start(GTK_BOX(game_box), combo_lbl, FALSE, FALSE, 0);
+
+    g_game_combo = gtk_combo_box_text_new();
+    int active_idx = 0;
+
+    for (int i = 0; i < g_num_games; i++) {
+        char item_text[256];
+        snprintf(item_text, sizeof(item_text), "%s (AppID: %d)", g_library_games[i].name, g_library_games[i].app_id);
+        gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(g_game_combo), item_text);
+
+        if (g_library_games[i].app_id == g_current_appid) {
+            active_idx = i;
+        }
+    }
+
+    gtk_combo_box_set_active(GTK_COMBO_BOX(g_game_combo), active_idx);
+    g_signal_connect(g_game_combo, "changed", G_CALLBACK(on_game_changed), NULL);
+    gtk_box_pack_start(GTK_BOX(game_box), g_game_combo, TRUE, TRUE, 0);
+
+    // Game Info Status Label
+    char info_str[256];
+    snprintf(info_str, sizeof(info_str), "Target Game: <b>%s</b> | AppID: <b>%d</b>", g_current_gamename, g_current_appid);
+    g_game_info_lbl = gtk_label_new(NULL);
+    gtk_label_set_markup(GTK_LABEL(g_game_info_lbl), info_str);
+    gtk_label_set_xalign(GTK_LABEL(g_game_info_lbl), 0.0);
+    gtk_box_pack_start(GTK_BOX(main_vbox), g_game_info_lbl, FALSE, FALSE, 0);
 
     // Frame for Flags
     GtkWidget *frame = gtk_frame_new("Proton Flags & Performance Wrappers");
@@ -157,8 +256,7 @@ int main(int argc, char *argv[]) {
 
     for (int i = 0; i < NUM_FLAGS; i++) {
         g_flags[i].check_btn = gtk_check_button_new_with_label(g_flags[i].name);
-        
-        // Initial defaults matching requested options
+
         if (strstr(g_flags[i].env_var, "PROTON_ENABLE_NVAPI") || strstr(g_flags[i].env_var, "gamemoderun")) {
             gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_flags[i].check_btn), TRUE);
             g_flags[i].enabled = true;
@@ -204,7 +302,7 @@ int main(int argc, char *argv[]) {
     {
       filename: 'vdf_parser.h',
       language: 'c',
-      description: 'Header file for Steam localconfig.vdf parsing in pure ANSI C',
+      description: 'Header file for Steam localconfig.vdf parsing and local library scanning',
       content: `/*
  * vdf_parser.h - Pure C Valve Data Format (VDF) Key-Value parser
  */
@@ -215,6 +313,11 @@ int main(int argc, char *argv[]) {
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
+
+typedef struct {
+    char name[128];
+    int app_id;
+} SteamGameInfo;
 
 typedef struct {
     int app_id;
@@ -230,13 +333,16 @@ bool vdf_get_launch_options(const char *vdf_filepath, int app_id, char *out_opti
 // Locate standard Linux Steam localconfig.vdf path (~/.local/share/Steam/userdata/.../config/localconfig.vdf)
 bool find_steam_vdf_path(char *out_path, size_t max_len);
 
+// Scan local Steam steamapps folder for installed appmanifest_*.acf files
+int scan_installed_steam_games(SteamGameInfo *out_games, int max_games);
+
 #endif // VDF_PARSER_H
 `
     },
     {
       filename: 'vdf_parser.c',
       language: 'c',
-      description: 'C implementation of Valve Data Format (VDF) reader/writer',
+      description: 'C implementation of Valve Data Format (VDF) reader/writer & local game scanner',
       content: `/*
  * vdf_parser.c - Pure C Valve Data Format parser implementation
  */
@@ -248,6 +354,88 @@ bool find_steam_vdf_path(char *out_path, size_t max_len);
 #include <unistd.h>
 #include <sys/types.h>
 #include <pwd.h>
+#include <dirent.h>
+
+int scan_installed_steam_games(SteamGameInfo *out_games, int max_games) {
+    if (!out_games || max_games <= 0) return 0;
+
+    const char *home = getenv("HOME");
+    if (!home) {
+        struct passwd *pw = getpwuid(getuid());
+        if (pw) home = pw->pw_dir;
+    }
+    if (!home) return 0;
+
+    const char *steamapps_dirs[] = {
+        "/.local/share/Steam/steamapps",
+        "/.steam/steam/steamapps",
+        "/.var/app/com.valvesoftware.Steam/.steam/steam/steamapps"
+    };
+
+    int count = 0;
+
+    for (int d = 0; d < 3; d++) {
+        char path[1024];
+        snprintf(path, sizeof(path), "%s%s", home, steamapps_dirs[d]);
+        DIR *dir = opendir(path);
+        if (!dir) continue;
+
+        struct dirent *entry;
+        while ((entry = readdir(dir)) != NULL) {
+            if (strncmp(entry->d_name, "appmanifest_", 12) == 0 && strstr(entry->d_name, ".acf")) {
+                if (count >= max_games) break;
+
+                char acf_file[1024];
+                snprintf(acf_file, sizeof(acf_file), "%s/%s", path, entry->d_name);
+
+                FILE *fp = fopen(acf_file, "r");
+                if (!fp) continue;
+
+                int appid = 0;
+                char name[128] = "";
+                char line[512];
+
+                while (fgets(line, sizeof(line), fp)) {
+                    if (strstr(line, "\"appid\"")) {
+                        char *p = strchr(line + 7, 34);
+                        if (p) {
+                            p++;
+                            appid = atoi(p);
+                        }
+                    } else if (strstr(line, "\"name\"")) {
+                        char *p = strchr(line + 6, 34);
+                        if (p) {
+                            p++;
+                            char *end = strchr(p, 34);
+                            if (end) *end = '\\0';
+                            strncpy(name, p, sizeof(name) - 1);
+                        }
+                    }
+                }
+                fclose(fp);
+
+                if (appid > 0 && strlen(name) > 0) {
+                    bool exists = false;
+                    for (int i = 0; i < count; i++) {
+                        if (out_games[i].app_id == appid) {
+                            exists = true;
+                            break;
+                        }
+                    }
+                    if (!exists) {
+                        out_games[count].app_id = appid;
+                        strncpy(out_games[count].name, name, sizeof(out_games[count].name) - 1);
+                        count++;
+                    }
+                }
+            }
+        }
+        closedir(dir);
+        if (count > 0) break;
+    }
+
+    return count;
+}
 
 bool find_steam_vdf_path(char *out_path, size_t max_len) {
     const char *home = getenv("HOME");
