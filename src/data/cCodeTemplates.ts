@@ -205,6 +205,52 @@ static GdkPixbuf *create_app_icon(void) {
     return NULL;
 }
 
+static void setup_taskbar_icon(GtkWidget *window) {
+    GdkPixbuf *icon_pixbuf = create_app_icon();
+    if (icon_pixbuf) {
+        gtk_window_set_icon(GTK_WINDOW(window), icon_pixbuf);
+        GList *icon_list = g_list_append(NULL, icon_pixbuf);
+        gtk_window_set_default_icon_list(icon_list);
+        g_list_free(icon_list);
+
+        const char *home = getenv("HOME");
+        if (home && strlen(home) > 0) {
+            char icon_dir[512];
+            snprintf(icon_dir, sizeof(icon_dir), "%s/.local/share/icons/hicolor/64x64/apps", home);
+            char mkdir_cmd[1024];
+            snprintf(mkdir_cmd, sizeof(mkdir_cmd), "mkdir -p \"%s\"", icon_dir);
+            if (system(mkdir_cmd) == 0) {
+                char icon_path[1024];
+                snprintf(icon_path, sizeof(icon_path), "%s/proton_mgr.png", icon_dir);
+                gdk_pixbuf_save(icon_pixbuf, icon_path, "png", NULL, NULL);
+
+                GtkIconTheme *theme = gtk_icon_theme_get_default();
+                gtk_icon_theme_append_search_path(theme, icon_dir);
+                gtk_window_set_icon_name(GTK_WINDOW(window), "proton_mgr");
+                gtk_window_set_default_icon_name("proton_mgr");
+            }
+
+            char desktop_dir[512];
+            snprintf(desktop_dir, sizeof(desktop_dir), "%s/.local/share/applications", home);
+            char mkdir_desktop[1024];
+            snprintf(mkdir_desktop, sizeof(mkdir_desktop), "mkdir -p \"%s\"", desktop_dir);
+            if (system(mkdir_desktop) == 0) {
+                char desktop_file[1024];
+                snprintf(desktop_file, sizeof(desktop_file), "%s/proton_mgr.desktop", desktop_dir);
+                FILE *dfp = fopen(desktop_file, "w");
+                if (dfp) {
+                    fprintf(dfp, "[Desktop Entry]\nType=Application\nName=Proton Launch Options Manager\nExec=proton_mgr\nIcon=proton_mgr\nTerminal=false\nStartupWMClass=proton_mgr\nCategories=Utility;\n");
+                    fclose(dfp);
+                }
+            }
+        }
+        g_object_unref(icon_pixbuf);
+    } else {
+        gtk_window_set_default_icon_name("steam");
+        gtk_window_set_icon_name(GTK_WINDOW(window), "steam");
+    }
+}
+
 int main(int argc, char *argv[]) {
     gtk_init(&argc, &argv);
 
@@ -226,7 +272,7 @@ int main(int argc, char *argv[]) {
         if (!has_selected && g_num_games < 128) {
             g_library_games[g_num_games].app_id = g_current_appid;
             strncpy(g_library_games[g_num_games].name, g_current_gamename, sizeof(g_library_games[g_num_games].name) - 1);
-            g_library_games[g_num_games].name[sizeof(g_library_games[g_num_games].name) - 1] = '\0';
+            g_library_games[g_num_games].name[sizeof(g_library_games[g_num_games].name) - 1] = 0;
             g_num_games++;
         }
     }
@@ -236,18 +282,8 @@ int main(int argc, char *argv[]) {
     gtk_window_set_default_size(GTK_WINDOW(window), 720, 560);
     gtk_container_set_border_width(GTK_CONTAINER(window), 16);
 
-    // Set GTK Taskbar / Window Icon (from embedded SVG with fallback to system steam icon)
-    GdkPixbuf *icon_pixbuf = create_app_icon();
-    if (icon_pixbuf) {
-        gtk_window_set_icon(GTK_WINDOW(window), icon_pixbuf);
-        GList *icon_list = g_list_append(NULL, icon_pixbuf);
-        gtk_window_set_default_icon_list(icon_list);
-        g_list_free(icon_list);
-        g_object_unref(icon_pixbuf);
-    } else {
-        gtk_window_set_default_icon_name("steam");
-        gtk_window_set_icon_name(GTK_WINDOW(window), "steam");
-    }
+    // Set GTK Taskbar & Desktop Window Icon (embedded SVG + KDE Plasma desktop icon registration)
+    setup_taskbar_icon(window);
 
     g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 
@@ -412,7 +448,7 @@ static bool is_steam_runtime_or_tool(const char *name) {
     for (size_t i = 0; i < len; i++) {
         lower[i] = (char)tolower((unsigned char)name[i]);
     }
-    lower[len] = '\0';
+    lower[len] = 0;
 
     if (strstr(lower, "steam linux runtime") ||
         strstr(lower, "linux runtime") ||
@@ -491,7 +527,7 @@ int scan_installed_steam_games(SteamGameInfo *out_games, int max_games) {
                         if (val_start) {
                             val_start++;
                             char *val_end = strchr(val_start, 34);
-                            if (val_end) *val_end = '\\0';
+                            if (val_end) *val_end = 0;
                             strncpy(name, val_start, sizeof(name) - 1);
                         }
                     }
@@ -562,7 +598,7 @@ bool vdf_get_launch_options(const char *vdf_filepath, int app_id, char *out_opti
                 start++;
                 char *end = strchr(start, 34);
                 if (end) {
-                    *end = '\\0';
+                    *end = 0;
                     strncpy(out_options, start, max_len);
                     fclose(fp);
                     return true;

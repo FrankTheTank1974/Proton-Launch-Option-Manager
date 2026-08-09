@@ -114,11 +114,13 @@ Provide a concise, highly technical answer detailing optimal Proton flags (such 
       }
 
       const ai = new GoogleGenAI({ apiKey });
-      const model = 'gemini-3.6-flash';
+      const model = 'gemini-2.5-flash';
 
-      const response = await ai.models.generateContent({
-        model,
-        contents: `You are an expert Linux gaming community analyst.
+      let response;
+      try {
+        response = await ai.models.generateContent({
+          model,
+          contents: `You are an expert Linux gaming community analyst.
 We are examining ProtonDB (https://www.protondb.com${appId ? `/app/${appId}` : ''}) community reports and user comments for "${gameName}" (Steam App ID: ${appId || 'N/A'}) running on Linux / Steam Deck (${distro}).
 
 Search ProtonDB community reports and Linux gamer comments for "${gameName}".
@@ -133,10 +135,30 @@ Return a JSON object with:
 - "sourceUrl": The ProtonDB URL ("https://www.protondb.com/app/${appId || ''}").
 
 Return ONLY valid JSON without markdown fences if possible.`,
-        config: {
-          tools: [{ googleSearch: {} }],
-        },
-      });
+          config: {
+            tools: [{ googleSearch: {} }],
+          },
+        });
+      } catch (searchErr) {
+        console.warn('ProtonDB search grounding fallback:', searchErr);
+        // Retry without search grounding tools if search API or quota fails
+        response = await ai.models.generateContent({
+          model,
+          contents: `You are an expert Linux gaming community analyst.
+Analyze ProtonDB community reports and recommended launch options for "${gameName}" on Linux (${distro}).
+Identify specific launch flags, environment variables, or wrappers (such as PROTON_USE_NTSYNC, PROTON_ENABLE_NVAPI, VKD3D_CONFIG, gamemoderun, mangohud, gamescope).
+
+Return a JSON object with:
+- "tier": "${protonDbTier}"
+- "trending": "${protonDbTrending}"
+- "summary": A 2-sentence summary of overall Linux compatibility and optimal launch configuration for this game.
+- "commentsAdvice": An array of 3 to 5 markdown formatted strings detailing recommended launch flags and performance tweaks.
+- "recommendedCommand": A single optimized launch command string ending with %command%.
+- "sourceUrl": "${appId ? `https://www.protondb.com/app/${appId}` : 'https://www.protondb.com'}"
+
+Return ONLY valid JSON.`,
+        });
+      }
 
       const text = response.text || '';
       try {
@@ -163,7 +185,7 @@ Return ONLY valid JSON without markdown fences if possible.`,
         sourceUrl: appId ? `https://www.protondb.com/app/${appId}` : `https://www.protondb.com`,
       });
     } catch (err) {
-      console.error('ProtonDB Insights Error:', err);
+      console.warn('ProtonDB Insights Fallback:', err);
       return res.json({
         tier: protonDbTier,
         trending: protonDbTrending,
