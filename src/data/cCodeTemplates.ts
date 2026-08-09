@@ -19,6 +19,7 @@ export function getCCodeTemplates(selectedGameName: string, selectedAppId: numbe
     });
   }
 
+  const escapedSelectedGameName = selectedGameName.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
   const initialGameArray = gamesToUse.map(g => `    { "${g.name.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}", ${g.appId} }`).join(',\n');
 
   return [
@@ -73,12 +74,12 @@ static GtkWidget *g_game_info_lbl;
 static char g_custom_args[512] = "-novid -high";
 
 static SteamGameInfo g_library_games[128] = {
-\${initialGameArray}
+${initialGameArray}
 };
-static int g_num_games = \${gamesToUse.length};
+static int g_num_games = ${gamesToUse.length};
 
-static int g_current_appid = \${selectedAppId};
-static char g_current_gamename[128] = "\${selectedGameName.replace(/\\\\/g, '\\\\\\\\').replace(/"/g, '\\\\"')}";
+static int g_current_appid = ${selectedAppId};
+static char g_current_gamename[128] = "${escapedSelectedGameName}";
 
 void build_command_string(char *out_buf, size_t max_len) {
     char env_vars[1024] = "";
@@ -229,7 +230,10 @@ int main(int argc, char *argv[]) {
     gtk_container_set_border_width(GTK_CONTAINER(window), 16);
 
     // Set GTK Taskbar / Window Icon (from embedded XPM with fallback to system steam icon)
-    GdkPixbuf *icon_pixbuf = gdk_pixbuf_new_from_xpm_data(app_icon_xpm);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+    GdkPixbuf *icon_pixbuf = gdk_pixbuf_new_from_xpm_data((const char **)app_icon_xpm);
+#pragma GCC diagnostic pop
     if (icon_pixbuf) {
         gtk_window_set_icon(GTK_WINDOW(window), icon_pixbuf);
         g_object_unref(icon_pixbuf);
@@ -430,20 +434,30 @@ int scan_installed_steam_games(SteamGameInfo *out_games, int max_games) {
                 char name[128] = "";
                 char line[512];
 
+                char key_appid[32];
+                char key_name[32];
+                snprintf(key_appid, sizeof(key_appid), "%cappid%c", 34, 34);
+                snprintf(key_name, sizeof(key_name), "%cname%c", 34, 34);
+
                 while (fgets(line, sizeof(line), fp)) {
-                    if (strstr(line, "\"appid\"")) {
-                        char *p = strchr(line + 7, 34);
-                        if (p) {
-                            p++;
-                            appid = atoi(p);
+                    char *p_appid = strstr(line, key_appid);
+                    char *p_name = strstr(line, key_name);
+
+                    if (p_appid) {
+                        p_appid += strlen(key_appid);
+                        char *val_start = strchr(p_appid, 34);
+                        if (val_start) {
+                            val_start++;
+                            appid = atoi(val_start);
                         }
-                    } else if (strstr(line, "\"name\"")) {
-                        char *p = strchr(line + 6, 34);
-                        if (p) {
-                            p++;
-                            char *end = strchr(p, 34);
-                            if (end) *end = '\\0';
-                            strncpy(name, p, sizeof(name) - 1);
+                    } else if (p_name) {
+                        p_name += strlen(key_name);
+                        char *val_start = strchr(p_name, 34);
+                        if (val_start) {
+                            val_start++;
+                            char *val_end = strchr(val_start, 34);
+                            if (val_end) *val_end = '\\0';
+                            strncpy(name, val_start, sizeof(name) - 1);
                         }
                     }
                 }
