@@ -178,48 +178,55 @@ static void on_save_vdf_clicked(GtkWidget *btn, gpointer user_data) {
     gtk_widget_destroy(dialog);
 }
 
-/* Embedded 16x16 XPM Taskbar Icon */
-static const char *app_icon_xpm[] = {
-"16 16 5 1",
-"  c None",
-". c #1b2838",
-"+ c #a855f7",
-"@ c #06b6d4",
-"# c #66c0f4",
-"   ..........   ",
-"  .++######++.  ",
-" .+#@@@@@@@@#+. ",
-".+#@@......@@#+.",
-".+@@..+@@+..@@+.",
-".+@..+####+..@+.",
-".+@..#@..@#..@+.",
-".+@..#@..@#..@+.",
-".+@..+####+..@+.",
-".+@@..+@@+..@@+.",
-".+#@@......@@#+.",
-" .+#@@@@@@@@#+. ",
-"  .++######++.  ",
-"   ..........   ",
-"                ",
-"                "
-};
+/* Embedded SVG Taskbar & Window Icon */
+static GdkPixbuf *create_app_icon(void) {
+    const char *svg_data = 
+        "<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'>"
+        "<rect width='64' height='64' rx='14' fill='#1b2838'/>"
+        "<circle cx='32' cy='32' r='22' fill='none' stroke='#a855f7' stroke-width='4'/>"
+        "<circle cx='32' cy='32' r='14' fill='none' stroke='#06b6d4' stroke-width='2'/>"
+        "<path d='M22 42 L32 20 L42 42 L32 36 Z' fill='#66c0f4'/>"
+        "<circle cx='32' cy='25' r='4' fill='#a855f7'/>"
+        "</svg>";
+
+    GError *error = NULL;
+    GdkPixbufLoader *loader = gdk_pixbuf_loader_new();
+    if (gdk_pixbuf_loader_write(loader, (const guchar *)svg_data, strlen(svg_data), &error) &&
+        gdk_pixbuf_loader_close(loader, &error)) {
+        GdkPixbuf *pixbuf = gdk_pixbuf_loader_get_pixbuf(loader);
+        if (pixbuf) {
+            g_object_ref(pixbuf);
+            g_object_unref(loader);
+            return pixbuf;
+        }
+    }
+    if (error) g_error_free(error);
+    if (loader) g_object_unref(loader);
+    return NULL;
+}
 
 int main(int argc, char *argv[]) {
     gtk_init(&argc, &argv);
 
+    g_set_application_name("Proton Launch Options Manager");
+    g_set_prgname("proton_mgr");
+
     // Auto-detect installed games from local Steam library folders
     SteamGameInfo scanned[64];
     int scanned_cnt = scan_installed_steam_games(scanned, 64);
-    for (int i = 0; i < scanned_cnt; i++) {
-        bool exists = false;
-        for (int j = 0; j < g_num_games; j++) {
-            if (g_library_games[j].app_id == scanned[i].app_id) {
-                exists = true;
-                break;
+    if (scanned_cnt > 0) {
+        g_num_games = 0;
+        bool has_selected = false;
+        for (int i = 0; i < scanned_cnt && g_num_games < 128; i++) {
+            g_library_games[g_num_games++] = scanned[i];
+            if (scanned[i].app_id == g_current_appid) {
+                has_selected = true;
             }
         }
-        if (!exists && g_num_games < 128) {
-            g_library_games[g_num_games] = scanned[i];
+        if (!has_selected && g_num_games < 128) {
+            g_library_games[g_num_games].app_id = g_current_appid;
+            strncpy(g_library_games[g_num_games].name, g_current_gamename, sizeof(g_library_games[g_num_games].name) - 1);
+            g_library_games[g_num_games].name[sizeof(g_library_games[g_num_games].name) - 1] = '\0';
             g_num_games++;
         }
     }
@@ -229,15 +236,16 @@ int main(int argc, char *argv[]) {
     gtk_window_set_default_size(GTK_WINDOW(window), 720, 560);
     gtk_container_set_border_width(GTK_CONTAINER(window), 16);
 
-    // Set GTK Taskbar / Window Icon (from embedded XPM with fallback to system steam icon)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    GdkPixbuf *icon_pixbuf = gdk_pixbuf_new_from_xpm_data((const char **)app_icon_xpm);
-#pragma GCC diagnostic pop
+    // Set GTK Taskbar / Window Icon (from embedded SVG with fallback to system steam icon)
+    GdkPixbuf *icon_pixbuf = create_app_icon();
     if (icon_pixbuf) {
         gtk_window_set_icon(GTK_WINDOW(window), icon_pixbuf);
+        GList *icon_list = g_list_append(NULL, icon_pixbuf);
+        gtk_window_set_default_icon_list(icon_list);
+        g_list_free(icon_list);
         g_object_unref(icon_pixbuf);
     } else {
+        gtk_window_set_default_icon_name("steam");
         gtk_window_set_icon_name(GTK_WINDOW(window), "steam");
     }
 
@@ -394,6 +402,33 @@ int scan_installed_steam_games(SteamGameInfo *out_games, int max_games);
 #include <sys/types.h>
 #include <pwd.h>
 #include <dirent.h>
+#include <ctype.h>
+
+static bool is_steam_runtime_or_tool(const char *name) {
+    if (!name || strlen(name) == 0) return true;
+    char lower[256];
+    size_t len = strlen(name);
+    if (len >= sizeof(lower)) len = sizeof(lower) - 1;
+    for (size_t i = 0; i < len; i++) {
+        lower[i] = (char)tolower((unsigned char)name[i]);
+    }
+    lower[len] = '\0';
+
+    if (strstr(lower, "steam linux runtime") ||
+        strstr(lower, "linux runtime") ||
+        strstr(lower, "steamworks common redistributables") ||
+        strstr(lower, "steamworks") ||
+        strstr(lower, "common redistributables") ||
+        strstr(lower, "proton") ||
+        strstr(lower, "battleye runtime") ||
+        strstr(lower, "easyanticheat") ||
+        strstr(lower, "steamvr") ||
+        strstr(lower, "steam controller") ||
+        strstr(lower, "steam client")) {
+        return true;
+    }
+    return false;
+}
 
 int scan_installed_steam_games(SteamGameInfo *out_games, int max_games) {
     if (!out_games || max_games <= 0) return 0;
@@ -424,7 +459,7 @@ int scan_installed_steam_games(SteamGameInfo *out_games, int max_games) {
             if (strncmp(entry->d_name, "appmanifest_", 12) == 0 && strstr(entry->d_name, ".acf")) {
                 if (count >= max_games) break;
 
-                char acf_file[1024];
+                char acf_file[2048];
                 snprintf(acf_file, sizeof(acf_file), "%s/%s", path, entry->d_name);
 
                 FILE *fp = fopen(acf_file, "r");
@@ -463,7 +498,7 @@ int scan_installed_steam_games(SteamGameInfo *out_games, int max_games) {
                 }
                 fclose(fp);
 
-                if (appid > 0 && strlen(name) > 0) {
+                if (appid > 0 && strlen(name) > 0 && !is_steam_runtime_or_tool(name)) {
                     bool exists = false;
                     for (int i = 0; i < count; i++) {
                         if (out_games[i].app_id == appid) {
