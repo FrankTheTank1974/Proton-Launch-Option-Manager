@@ -18,6 +18,7 @@ interface DetectedGameItem {
   protonVersion: string;
   selected: boolean;
   source: 'host-scan' | 'folder-picker' | 'vdf-file';
+  installDate?: number;
 }
 
 export const ScanLocalLibraryModal: React.FC<ScanLocalLibraryModalProps> = ({
@@ -53,6 +54,7 @@ export const ScanLocalLibraryModal: React.FC<ScanLocalLibraryModalProps> = ({
               protonVersion: 'Proton Experimental',
               selected: true,
               source: 'host-scan',
+              installDate: g.installDate,
             }));
           setDetectedGames(formatted);
           setScanMessage(`Successfully found ${formatted.length} installed Steam games on system!`);
@@ -130,6 +132,7 @@ export const ScanLocalLibraryModal: React.FC<ScanLocalLibraryModalProps> = ({
                 protonVersion: 'Proton Experimental',
                 selected: true,
                 source: 'folder-picker',
+                installDate: parsed.installDate || file.lastModified,
               });
             }
           }
@@ -194,6 +197,7 @@ export const ScanLocalLibraryModal: React.FC<ScanLocalLibraryModalProps> = ({
                   protonVersion: 'Proton Experimental',
                   selected: true,
                   source: 'folder-picker',
+                  installDate: parsed.installDate || file.lastModified,
                 });
               }
             }
@@ -242,6 +246,10 @@ export const ScanLocalLibraryModal: React.FC<ScanLocalLibraryModalProps> = ({
       bannerHeroUrl: g.bannerHeroUrl,
       protonVersion: g.protonVersion,
       currentLaunchOptions: g.currentLaunchOptions,
+      lastUpdated: g.installDate
+        ? new Date(g.installDate).toISOString().slice(0, 16).replace('T', ' ')
+        : new Date().toISOString().slice(0, 16).replace('T', ' '),
+      installDate: g.installDate,
       isFavorite: false,
     }));
 

@@ -47,6 +47,8 @@ export interface SteamGame {
   protonVersion: string;
   currentLaunchOptions: string;
   lastUpdated: string;
+  installDate?: number; // Unix timestamp in milliseconds
+  releaseDate?: string; // Release date (e.g. YYYY-MM-DD)
   isFavorite?: boolean;
   installedPath?: string;
   developer?: string;

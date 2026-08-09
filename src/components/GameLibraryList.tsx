@@ -23,8 +23,8 @@ export const GameLibraryList: React.FC<GameLibraryListProps> = ({
 }) => {
   const [search, setSearch] = useState('');
   const [filterFavorite, setFilterFavorite] = useState(false);
-  const [sortBy, setSortBy] = useState<'name' | 'id'>('name');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [sortBy, setSortBy] = useState<'date' | 'release' | 'name' | 'id'>('date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   const filteredAndSortedGames = games
     .filter((game) => {
@@ -36,7 +36,15 @@ export const GameLibraryList: React.FC<GameLibraryListProps> = ({
     })
     .sort((a, b) => {
       let comp = 0;
-      if (sortBy === 'name') {
+      if (sortBy === 'date') {
+        const timeA = a.installDate || (a.lastUpdated ? new Date(a.lastUpdated).getTime() : 0);
+        const timeB = b.installDate || (b.lastUpdated ? new Date(b.lastUpdated).getTime() : 0);
+        comp = timeA - timeB;
+      } else if (sortBy === 'release') {
+        const timeA = a.releaseDate ? new Date(a.releaseDate).getTime() : 0;
+        const timeB = b.releaseDate ? new Date(b.releaseDate).getTime() : 0;
+        comp = timeA - timeB;
+      } else if (sortBy === 'name') {
         comp = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
       } else if (sortBy === 'id') {
         comp = a.appId - b.appId;
@@ -116,6 +124,28 @@ export const GameLibraryList: React.FC<GameLibraryListProps> = ({
             <ArrowUpDown className="w-3 h-3 text-cyan-400" />
             <span className="text-[11px] text-slate-400 font-medium">Sort:</span>
             <div className="flex items-center bg-slate-900 border border-slate-800 rounded p-0.5 space-x-0.5">
+              <button
+                onClick={() => setSortBy('date')}
+                className={`px-2 py-0.5 rounded text-[11px] font-medium transition ${
+                  sortBy === 'date'
+                    ? 'bg-cyan-950 text-cyan-300 border border-cyan-800/60 font-semibold'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Sort by installation / manifest date"
+              >
+                Install Date
+              </button>
+              <button
+                onClick={() => setSortBy('release')}
+                className={`px-2 py-0.5 rounded text-[11px] font-medium transition ${
+                  sortBy === 'release'
+                    ? 'bg-cyan-950 text-cyan-300 border border-cyan-800/60 font-semibold'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Sort by original game release date"
+              >
+                Release Date
+              </button>
               <button
                 onClick={() => setSortBy('name')}
                 className={`px-2 py-0.5 rounded text-[11px] font-medium transition ${
@@ -216,6 +246,24 @@ export const GameLibraryList: React.FC<GameLibraryListProps> = ({
                     <span className="text-slate-500">ID: {game.appId}</span>
                     <span>•</span>
                     <span className="truncate text-cyan-400/90">{game.protonVersion}</span>
+                    {game.releaseDate && (
+                      <>
+                        <span>•</span>
+                        <span className="text-slate-400 font-sans truncate" title="Release date">
+                          {game.releaseDate}
+                        </span>
+                      </>
+                    )}
+                    {!game.releaseDate && (game.installDate || game.lastUpdated) && (
+                      <>
+                        <span>•</span>
+                        <span className="text-slate-500 truncate" title="Installation / update timestamp">
+                          {game.installDate
+                            ? new Date(game.installDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+                            : game.lastUpdated?.split(' ')[0]}
+                        </span>
+                      </>
+                    )}
                   </div>
 
                   {hasCustomOptions && (

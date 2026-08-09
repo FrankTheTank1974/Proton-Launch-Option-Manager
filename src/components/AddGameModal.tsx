@@ -18,6 +18,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
   const [appId, setAppId] = useState('');
   const [protonVersion, setProtonVersion] = useState('Proton Experimental');
   const [developer, setDeveloper] = useState('');
+  const [releaseDate, setReleaseDate] = useState('');
   const [bannerUrl, setBannerUrl] = useState('');
   const [iconUrl, setIconUrl] = useState('');
   const [loadingGrid, setLoadingGrid] = useState(false);
@@ -84,6 +85,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
       protonVersion: protonVersion.trim(),
       currentLaunchOptions: 'gamemoderun %command%',
       lastUpdated: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      releaseDate: releaseDate.trim() || undefined,
       isFavorite: false,
       developer: developer.trim() || 'Custom Title',
     };
@@ -92,6 +94,7 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
     onClose();
     setName('');
     setAppId('');
+    setReleaseDate('');
     setBannerUrl('');
     setIconUrl('');
   };
@@ -200,12 +203,22 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1">Proton Runner</label>
-              <ProtonVersionSelector
-                value={protonVersion}
-                onChange={(ver) => setProtonVersion(ver)}
+              <label className="text-xs font-semibold text-slate-300 block mb-1">Release Date (Optional)</label>
+              <input
+                type="date"
+                value={releaseDate}
+                onChange={(e) => setReleaseDate(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 focus:border-purple-500 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-slate-300 block mb-1">Proton Runner</label>
+            <ProtonVersionSelector
+              value={protonVersion}
+              onChange={(ver) => setProtonVersion(ver)}
+            />
           </div>
 
           <div className="pt-2">

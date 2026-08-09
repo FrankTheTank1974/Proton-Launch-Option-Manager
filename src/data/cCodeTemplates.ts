@@ -400,6 +400,7 @@ int main(int argc, char *argv[]) {
 typedef struct {
     char name[128];
     int app_id;
+    long long last_updated;
 } SteamGameInfo;
 
 typedef struct {
@@ -502,17 +503,21 @@ int scan_installed_steam_games(SteamGameInfo *out_games, int max_games) {
                 if (!fp) continue;
 
                 int appid = 0;
+                long long last_updated = 0;
                 char name[128] = "";
                 char line[512];
 
                 char key_appid[32];
                 char key_name[32];
+                char key_updated[32];
                 snprintf(key_appid, sizeof(key_appid), "%cappid%c", 34, 34);
                 snprintf(key_name, sizeof(key_name), "%cname%c", 34, 34);
+                snprintf(key_updated, sizeof(key_updated), "%cLastUpdated%c", 34, 34);
 
                 while (fgets(line, sizeof(line), fp)) {
                     char *p_appid = strstr(line, key_appid);
                     char *p_name = strstr(line, key_name);
+                    char *p_updated = strstr(line, key_updated);
 
                     if (p_appid) {
                         p_appid += strlen(key_appid);
@@ -530,9 +535,23 @@ int scan_installed_steam_games(SteamGameInfo *out_games, int max_games) {
                             if (val_end) *val_end = 0;
                             strncpy(name, val_start, sizeof(name) - 1);
                         }
+                    } else if (p_updated) {
+                        p_updated += strlen(key_updated);
+                        char *val_start = strchr(p_updated, 34);
+                        if (val_start) {
+                            val_start++;
+                            last_updated = atoll(val_start);
+                        }
                     }
                 }
                 fclose(fp);
+
+                if (last_updated == 0) {
+                    struct stat st;
+                    if (stat(acf_file, &st) == 0) {
+                        last_updated = (long long)st.st_mtime;
+                    }
+                }
 
                 if (appid > 0 && strlen(name) > 0 && !is_steam_runtime_or_tool(name)) {
                     bool exists = false;
@@ -544,6 +563,7 @@ int scan_installed_steam_games(SteamGameInfo *out_games, int max_games) {
                     }
                     if (!exists) {
                         out_games[count].app_id = appid;
+                        out_games[count].last_updated = last_updated;
                         strncpy(out_games[count].name, name, sizeof(out_games[count].name) - 1);
                         count++;
                     }
@@ -552,6 +572,17 @@ int scan_installed_steam_games(SteamGameInfo *out_games, int max_games) {
         }
         closedir(dir);
         if (count > 0) break;
+    }
+
+    // Sort installed games by last_updated timestamp descending (newest installed first)
+    for (int i = 0; i < count - 1; i++) {
+        for (int j = i + 1; j < count; j++) {
+            if (out_games[j].last_updated > out_games[i].last_updated) {
+                SteamGameInfo tmp = out_games[i];
+                out_games[i] = out_games[j];
+                out_games[j] = tmp;
+            }
+        }
     }
 
     return count;

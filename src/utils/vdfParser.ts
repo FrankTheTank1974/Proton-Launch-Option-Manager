@@ -23,14 +23,16 @@ export function isSteamRuntimeOrTool(name: string): boolean {
   return false;
 }
 
-export function parseAppManifestAcf(acfText: string): { appId: string; name: string } | null {
+export function parseAppManifestAcf(acfText: string): { appId: string; name: string; installDate?: number } | null {
   if (!acfText) return null;
   const appIdMatch = acfText.match(/"appid"\s*"(\d+)"/i);
   const nameMatch = acfText.match(/"name"\s*"([^"]*)"/i);
+  const lastUpdatedMatch = acfText.match(/"LastUpdated"\s*"(\d+)"/i) || acfText.match(/"installdate"\s*"(\d+)"/i);
   if (appIdMatch && nameMatch) {
     return {
       appId: appIdMatch[1],
       name: nameMatch[1],
+      installDate: lastUpdatedMatch ? parseInt(lastUpdatedMatch[1], 10) * 1000 : undefined,
     };
   }
   return null;

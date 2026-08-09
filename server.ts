@@ -29,7 +29,7 @@ async function startServer() {
       }
 
       const ai = new GoogleGenAI({ apiKey });
-      const model = 'gemini-2.5-flash';
+      const model = 'gemini-3.6-flash';
 
       const response = await ai.models.generateContent({
         model,
@@ -114,7 +114,7 @@ Provide a concise, highly technical answer detailing optimal Proton flags (such 
       }
 
       const ai = new GoogleGenAI({ apiKey });
-      const model = 'gemini-2.5-flash';
+      const model = 'gemini-3.6-flash';
 
       let response;
       try {
@@ -140,11 +140,11 @@ Return ONLY valid JSON without markdown fences if possible.`,
           },
         });
       } catch (searchErr) {
-        console.warn('ProtonDB search grounding fallback:', searchErr);
-        // Retry without search grounding tools if search API or quota fails
-        response = await ai.models.generateContent({
-          model,
-          contents: `You are an expert Linux gaming community analyst.
+        try {
+          // Retry without search grounding tools if search API or quota fails
+          response = await ai.models.generateContent({
+            model,
+            contents: `You are an expert Linux gaming community analyst.
 Analyze ProtonDB community reports and recommended launch options for "${gameName}" on Linux (${distro}).
 Identify specific launch flags, environment variables, or wrappers (such as PROTON_USE_NTSYNC, PROTON_ENABLE_NVAPI, VKD3D_CONFIG, gamemoderun, mangohud, gamescope).
 
@@ -157,20 +157,26 @@ Return a JSON object with:
 - "sourceUrl": "${appId ? `https://www.protondb.com/app/${appId}` : 'https://www.protondb.com'}"
 
 Return ONLY valid JSON.`,
-        });
+          });
+        } catch {
+          // If both AI requests fail (e.g. quota limit reached), fall through to default fallback response
+          response = null;
+        }
       }
 
-      const text = response.text || '';
-      try {
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          if (!parsed.tier || parsed.tier === 'Unknown') parsed.tier = protonDbTier;
-          if (!parsed.sourceUrl && appId) parsed.sourceUrl = `https://www.protondb.com/app/${appId}`;
-          return res.json(parsed);
+      const text = response ? (response.text || '') : '';
+      if (text) {
+        try {
+          const jsonMatch = text.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            if (!parsed.tier || parsed.tier === 'Unknown') parsed.tier = protonDbTier;
+            if (!parsed.sourceUrl && appId) parsed.sourceUrl = `https://www.protondb.com/app/${appId}`;
+            return res.json(parsed);
+          }
+        } catch {
+          // Fallback if JSON parsing fails
         }
-      } catch {
-        // Fallback if JSON parsing fails
       }
 
       return res.json({
@@ -204,7 +210,7 @@ Return ONLY valid JSON.`,
   app.get('/api/steam/scan-local', (req, res) => {
     try {
       const homeDir = os.homedir();
-      const detectedGamesMap = new Map<string, { appId: number; name: string; currentLaunchOptions: string; sourcePath: string }>();
+      const detectedGamesMap = new Map<string, { appId: number; name: string; currentLaunchOptions: string; sourcePath: string; installDate?: number }>();
 
       const possiblePaths = [
         path.join(homeDir, '.local/share/Steam'),
@@ -257,6 +263,7 @@ Return ONLY valid JSON.`,
                 const acfText = fs.readFileSync(filePath, 'utf-8');
                 const appIdMatch = acfText.match(/"appid"\s*"(\d+)"/i);
                 const nameMatch = acfText.match(/"name"\s*"([^"]*)"/i);
+                const lastUpdatedMatch = acfText.match(/"LastUpdated"\s*"(\d+)"/i) || acfText.match(/"installdate"\s*"(\d+)"/i);
 
                 if (appIdMatch && nameMatch) {
                   const appId = appIdMatch[1];
@@ -273,12 +280,23 @@ Return ONLY valid JSON.`,
                     lowerName.includes('steamvr') ||
                     lowerName.includes('steam controller');
 
+                  let installDate = lastUpdatedMatch ? parseInt(lastUpdatedMatch[1], 10) * 1000 : 0;
+                  if (!installDate) {
+                    try {
+                      const stats = fs.statSync(filePath);
+                      installDate = Math.round(stats.mtimeMs || stats.ctimeMs || 0);
+                    } catch {
+                      installDate = 0;
+                    }
+                  }
+
                   if (name && !isRuntime) {
                     detectedGamesMap.set(appId, {
                       appId: parseInt(appId, 10),
                       name,
                       currentLaunchOptions: '',
                       sourcePath: filePath,
+                      installDate,
                     });
                   }
                 }
@@ -324,12 +342,14 @@ Return ONLY valid JSON.`,
         }
       }
 
-      const detectedGames = Array.from(detectedGamesMap.values()).map((g) => ({
-        ...g,
-        protonVersion: 'Proton Experimental',
-        bannerUrl: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${g.appId}/header.jpg`,
-        bannerHeroUrl: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${g.appId}/library_hero.jpg`,
-      }));
+      const detectedGames = Array.from(detectedGamesMap.values())
+        .map((g) => ({
+          ...g,
+          protonVersion: 'Proton Experimental',
+          bannerUrl: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${g.appId}/header.jpg`,
+          bannerHeroUrl: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${g.appId}/library_hero.jpg`,
+        }))
+        .sort((a, b) => (b.installDate || 0) - (a.installDate || 0));
 
       return res.json({
         status: 'ok',

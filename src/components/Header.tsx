@@ -52,9 +52,6 @@ export const Header: React.FC<HeaderProps> = ({
                 <h1 className="text-xl font-bold tracking-tight text-slate-100">
                   Proton Launch Options Manager
                 </h1>
-                <span className="bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-xs font-mono px-2 py-0.5 rounded-full font-semibold">
-                  C / Linux Native
-                </span>
               </div>
               <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
                 <Cpu className="w-3.5 h-3.5 text-cyan-400" />
