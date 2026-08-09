@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { SteamGame } from '../types';
-import { parseAppManifestAcf, parseLocalConfigVdf } from '../utils/vdfParser';
+import { parseAppManifestAcf, parseLocalConfigVdf, isSteamRuntimeOrTool } from '../utils/vdfParser';
 import { X, HardDrive, FolderSearch, RefreshCw, CheckCircle2, FolderInput, AlertCircle, Gamepad2, Upload, Sparkles } from 'lucide-react';
 
 interface ScanLocalLibraryModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onImportGames: (newGames: SteamGame[]) => void;
+  onImportGames: (newGames: SteamGame[], replaceSampleGames?: boolean) => void;
 }
 
 interface DetectedGameItem {
@@ -30,6 +30,7 @@ export const ScanLocalLibraryModal: React.FC<ScanLocalLibraryModalProps> = ({
   const [steamFolderPaths, setSteamFolderPaths] = useState<string[]>([]);
   const [scanMessage, setScanMessage] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [replaceSampleGames, setReplaceSampleGames] = useState(true);
 
   const runHostScan = async () => {
     setScanning(true);
@@ -41,16 +42,18 @@ export const ScanLocalLibraryModal: React.FC<ScanLocalLibraryModalProps> = ({
         const data = await res.json();
         if (data.detectedGames && data.detectedGames.length > 0) {
           setSteamFolderPaths(data.steamAppsFolders || []);
-          const formatted: DetectedGameItem[] = data.detectedGames.map((g: any) => ({
-            appId: g.appId,
-            name: g.name,
-            currentLaunchOptions: g.currentLaunchOptions || '',
-            bannerUrl: g.bannerUrl,
-            bannerHeroUrl: g.bannerHeroUrl,
-            protonVersion: 'Proton Experimental',
-            selected: true,
-            source: 'host-scan',
-          }));
+          const formatted: DetectedGameItem[] = data.detectedGames
+            .filter((g: any) => !isSteamRuntimeOrTool(g.name))
+            .map((g: any) => ({
+              appId: g.appId,
+              name: g.name,
+              currentLaunchOptions: g.currentLaunchOptions || '',
+              bannerUrl: g.bannerUrl,
+              bannerHeroUrl: g.bannerHeroUrl,
+              protonVersion: 'Proton Experimental',
+              selected: true,
+              source: 'host-scan',
+            }));
           setDetectedGames(formatted);
           setScanMessage(`Successfully found ${formatted.length} installed Steam games on system!`);
         } else {
@@ -116,7 +119,7 @@ export const ScanLocalLibraryModal: React.FC<ScanLocalLibraryModalProps> = ({
           const content = evt.target?.result as string;
           if (content) {
             const parsed = parseAppManifestAcf(content);
-            if (parsed && !parsed.name.toLowerCase().includes('steamworks common redistributables') && !parsed.name.toLowerCase().includes('proton')) {
+            if (parsed && !isSteamRuntimeOrTool(parsed.name)) {
               const appIdNum = parseInt(parsed.appId, 10);
               gameMap.set(parsed.appId, {
                 appId: appIdNum,
@@ -180,7 +183,7 @@ export const ScanLocalLibraryModal: React.FC<ScanLocalLibraryModalProps> = ({
             if (fileName.startsWith('appmanifest_') && fileName.endsWith('.acf')) {
               const text = await file.text();
               const parsed = parseAppManifestAcf(text);
-              if (parsed && !parsed.name.toLowerCase().includes('steamworks common redistributables') && !parsed.name.toLowerCase().includes('proton')) {
+              if (parsed && !isSteamRuntimeOrTool(parsed.name)) {
                 const appIdNum = parseInt(parsed.appId, 10);
                 gameMap.set(parsed.appId, {
                   appId: appIdNum,
@@ -242,7 +245,7 @@ export const ScanLocalLibraryModal: React.FC<ScanLocalLibraryModalProps> = ({
       isFavorite: false,
     }));
 
-    onImportGames(formattedGames);
+    onImportGames(formattedGames, replaceSampleGames);
     onClose();
   };
 
@@ -429,10 +432,22 @@ export const ScanLocalLibraryModal: React.FC<ScanLocalLibraryModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between">
-          <p className="text-xs text-slate-400">
-            Selected: <strong className="text-cyan-300 font-bold">{selectedCount}</strong> / {detectedGames.length} games
-          </p>
+        <div className="p-4 bg-slate-950 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-4">
+            <p className="text-xs text-slate-400">
+              Selected: <strong className="text-cyan-300 font-bold">{selectedCount}</strong> / {detectedGames.length} games
+            </p>
+
+            <label className="flex items-center space-x-2 text-xs text-slate-300 cursor-pointer select-none bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-lg hover:border-slate-700 transition">
+              <input
+                type="checkbox"
+                checked={replaceSampleGames}
+                onChange={(e) => setReplaceSampleGames(e.target.checked)}
+                className="rounded border-slate-700 bg-slate-950 text-cyan-500 focus:ring-cyan-500/20 w-3.5 h-3.5"
+              />
+              <span className="font-medium text-slate-200">Replace example games with detected library</span>
+            </label>
+          </div>
 
           <div className="flex items-center space-x-2">
             <button

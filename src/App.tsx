@@ -79,26 +79,37 @@ export default function App() {
   };
 
   // Import detected games from local scan or directory picker
-  const handleImportLocalGames = (newGames: SteamGame[]) => {
-    setGames((prev) => {
-      const existingAppIds = new Set(prev.map((g) => g.appId));
-      const filteredNew = newGames.filter((g) => !existingAppIds.has(g.appId));
-      
-      // Update existing games if new launch options detected
-      const updatedPrev = prev.map((existing) => {
-        const foundNew = newGames.find((n) => n.appId === existing.appId);
-        if (foundNew && foundNew.currentLaunchOptions && !existing.currentLaunchOptions) {
-          return { ...existing, currentLaunchOptions: foundNew.currentLaunchOptions };
-        }
-        return existing;
-      });
+  const handleImportLocalGames = (newGames: SteamGame[], replaceSampleGames: boolean = true) => {
+    if (newGames.length === 0) return;
 
-      return [...updatedPrev, ...filteredNew];
+    setGames((prev) => {
+      if (replaceSampleGames) {
+        // Replace current sample games with user's detected local library
+        return newGames;
+      } else {
+        const existingAppIds = new Set(prev.map((g) => g.appId));
+        const filteredNew = newGames.filter((g) => !existingAppIds.has(g.appId));
+        
+        // Update existing games if new launch options detected
+        const updatedPrev = prev.map((existing) => {
+          const foundNew = newGames.find((n) => n.appId === existing.appId);
+          if (foundNew && foundNew.currentLaunchOptions && !existing.currentLaunchOptions) {
+            return { ...existing, currentLaunchOptions: foundNew.currentLaunchOptions };
+          }
+          return existing;
+        });
+
+        return [...updatedPrev, ...filteredNew];
+      }
     });
 
     if (newGames.length > 0) {
-      setSelectedGameId(newGames[0].id);
-      showToast(`Imported ${newGames.length} games into Steam library`);
+      handleSelectGame(newGames[0]);
+      showToast(
+        replaceSampleGames
+          ? `Replaced sample library with ${newGames.length} detected local games!`
+          : `Imported ${newGames.length} games into Steam library`
+      );
     }
   };
 

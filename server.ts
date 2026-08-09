@@ -239,7 +239,19 @@ Return ONLY valid JSON without markdown fences if possible.`,
                 if (appIdMatch && nameMatch) {
                   const appId = appIdMatch[1];
                   const name = nameMatch[1];
-                  if (name && !name.toLowerCase().includes('steamworks common redistributables') && !name.toLowerCase().includes('proton')) {
+                  const lowerName = (name || '').toLowerCase();
+                  const isRuntime = 
+                    lowerName.includes('steam linux runtime') ||
+                    lowerName.includes('linux runtime') ||
+                    lowerName.includes('steamworks') ||
+                    lowerName.includes('common redistributables') ||
+                    lowerName.includes('proton') ||
+                    lowerName.includes('battleye runtime') ||
+                    lowerName.includes('easyanticheat') ||
+                    lowerName.includes('steamvr') ||
+                    lowerName.includes('steam controller');
+
+                  if (name && !isRuntime) {
                     detectedGamesMap.set(appId, {
                       appId: parseInt(appId, 10),
                       name,

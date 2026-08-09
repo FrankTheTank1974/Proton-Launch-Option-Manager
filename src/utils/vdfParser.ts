@@ -1,5 +1,28 @@
 import { VdfAppConfig } from '../types';
 
+export function isSteamRuntimeOrTool(name: string): boolean {
+  if (!name) return true;
+  const lower = name.toLowerCase().trim();
+
+  if (
+    lower.includes('steam linux runtime') ||
+    lower.includes('linux runtime') ||
+    lower.includes('steamworks common redistributables') ||
+    lower.includes('steamworks') ||
+    lower.includes('common redistributables') ||
+    lower.includes('proton') ||
+    lower.includes('battleye runtime') ||
+    lower.includes('easyanticheat') ||
+    lower.includes('steamvr') ||
+    lower.includes('steam controller') ||
+    lower.includes('steam client')
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 export function parseAppManifestAcf(acfText: string): { appId: string; name: string } | null {
   if (!acfText) return null;
   const appIdMatch = acfText.match(/"appid"\s*"(\d+)"/i);

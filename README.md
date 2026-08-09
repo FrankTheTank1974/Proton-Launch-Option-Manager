@@ -104,7 +104,25 @@ GEMINI_API_KEY="your_gemini_api_key_here"
 APP_URL="http://localhost:3000"
 ```
 
-### 4. Running Locally (Development)
+### 4. Quick Start (One-Click Build, Run & Open Browser)
+
+You can build, start, and automatically launch the application in your default web browser using the helper script:
+
+```bash
+./start.sh
+# or using npm
+npm run launch
+```
+
+This script will:
+1. Verify and install npm dependencies if needed.
+2. Build the frontend assets and Express backend bundle.
+3. Automatically launch `http://localhost:3000` in your default system browser (`xdg-open`, `open`, `wslview`, or Windows default browser).
+4. Start the Node.js production server.
+
+---
+
+### 5. Running Locally (Manual Development)
 
 Start the full-stack development server (Express backend + Vite frontend):
 
