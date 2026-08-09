@@ -47,7 +47,6 @@ static ProtonFlag g_flags[] = {
 static const int NUM_FLAGS = sizeof(g_flags) / sizeof(g_flags[0]);
 
 static GtkWidget *g_preview_entry;
-static GtkWidget *g_game_combo;
 static char g_custom_args[512] = "-novid -high";
 static int g_current_appid = ${selectedAppId};
 
@@ -93,6 +92,8 @@ static void on_flag_toggled(GtkToggleButton *btn, gpointer user_data) {
 }
 
 static void on_copy_clicked(GtkWidget *btn, gpointer user_data) {
+    (void)btn;
+    (void)user_data;
     const char *text = gtk_entry_get_text(GTK_ENTRY(g_preview_entry));
     GtkClipboard *cb = gtk_clipboard_get(GDK_SELECTION_CLIPBOARD);
     gtk_clipboard_set_text(cb, text, -1);
@@ -105,6 +106,8 @@ static void on_copy_clicked(GtkWidget *btn, gpointer user_data) {
 }
 
 static void on_save_vdf_clicked(GtkWidget *btn, gpointer user_data) {
+    (void)btn;
+    (void)user_data;
     char full_cmd[MAX_CMD_LEN];
     build_command_string(full_cmd, sizeof(full_cmd));
 
@@ -156,7 +159,7 @@ int main(int argc, char *argv[]) {
         g_flags[i].check_btn = gtk_check_button_new_with_label(g_flags[i].name);
         
         // Initial defaults matching requested options
-        if (strstr(g_flags[i].key, "PROTON_ENABLE_NVAPI") || strstr(g_flags[i].key, "gamemoderun")) {
+        if (strstr(g_flags[i].env_var, "PROTON_ENABLE_NVAPI") || strstr(g_flags[i].env_var, "gamemoderun")) {
             gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_flags[i].check_btn), TRUE);
             g_flags[i].enabled = true;
         }
