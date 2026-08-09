@@ -273,7 +273,9 @@ bool vdf_get_launch_options(const char *vdf_filepath, int app_id, char *out_opti
 
     char line[1024];
     char target_app[64];
-    snprintf(target_app, sizeof(target_app), "\"\\\"%d\\\"\"", app_id);
+    char launch_key[32];
+    snprintf(target_app, sizeof(target_app), "%c%d%c", 34, app_id, 34);
+    snprintf(launch_key, sizeof(launch_key), "%cLaunchOptions%c", 34, 34);
     bool inside_app = false;
 
     while (fgets(line, sizeof(line), fp)) {
@@ -282,11 +284,11 @@ bool vdf_get_launch_options(const char *vdf_filepath, int app_id, char *out_opti
             continue;
         }
 
-        if (inside_app && strstr(line, "\"\\\"LaunchOptions\\\"\"")) {
-            char *start = strchr(line + strlen("\"\\\"LaunchOptions\\\"\""), '"');
+        if (inside_app && strstr(line, launch_key)) {
+            char *start = strchr(line + strlen(launch_key), 34);
             if (start) {
                 start++;
-                char *end = strchr(start, '"');
+                char *end = strchr(start, 34);
                 if (end) {
                     *end = '\\0';
                     strncpy(out_options, start, max_len);
