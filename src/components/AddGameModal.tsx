@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SteamGame } from '../types';
+import { ProtonVersionSelector } from './ProtonVersionSelector';
 import { X, Plus, Gamepad2, Image as ImageIcon, Sparkles, RefreshCw } from 'lucide-react';
 
 interface AddGameModalProps {
@@ -200,17 +201,10 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
 
             <div>
               <label className="text-xs font-semibold text-slate-300 block mb-1">Proton Runner</label>
-              <select
+              <ProtonVersionSelector
                 value={protonVersion}
-                onChange={(e) => setProtonVersion(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 focus:border-purple-500 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none"
-              >
-                <option value="Proton Experimental">Proton Experimental</option>
-                <option value="Proton 9.0-2">Proton 9.0-2</option>
-                <option value="Proton GE-Custom 9-10">Proton GE-Custom 9-10</option>
-                <option value="Proton 8.0-5">Proton 8.0-5</option>
-                <option value="Proton Hotfix">Proton Hotfix</option>
-              </select>
+                onChange={(ver) => setProtonVersion(ver)}
+              />
             </div>
           </div>
 

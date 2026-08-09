@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
+# Always ensure start.sh itself maintains executable permissions
+chmod +x "$0" 2>/dev/null || chmod +x start.sh 2>/dev/null || true
+
 PORT="${PORT:-3000}"
 APP_URL="http://localhost:${PORT}"
 
@@ -28,6 +31,8 @@ if [ -d ".git" ] && command -v git >/dev/null 2>&1; then
 
       if git pull origin "$CURRENT_BRANCH"; then
         echo "✅ Updated to latest version from GitHub!"
+        chmod +x "$0" 2>/dev/null || chmod +x start.sh 2>/dev/null || true
+        git update-index --chmod=+x start.sh 2>/dev/null || true
         REINSTALL_REQUIRED=true
       else
         echo "⚠️ Git pull failed. Continuing with local version."

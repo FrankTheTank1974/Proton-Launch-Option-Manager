@@ -706,7 +706,7 @@ Return ONLY valid JSON without markdown fences if possible.`,
     }
   });
 
-  // Scan installed Proton compatibility tools on disk
+  // Scan installed Proton compatibility tools on disk (both compatibilitytools.d and steamapps/common)
   app.get('/api/proton-runners/installed', (req, res) => {
     try {
       const homeDir = os.homedir();
@@ -718,9 +718,18 @@ Return ONLY valid JSON without markdown fences if possible.`,
         '/home/deck/.local/share/Steam/compatibilitytools.d',
       ];
 
+      const possibleSteamAppsPaths = [
+        path.join(homeDir, '.local/share/Steam/steamapps'),
+        path.join(homeDir, '.steam/steam/steamapps'),
+        path.join(homeDir, '.steam/root/steamapps'),
+        path.join(homeDir, '.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps'),
+        '/home/deck/.local/share/Steam/steamapps',
+      ];
+
       const installedRunners: any[] = [];
       const searchedDirs: string[] = [];
 
+      // 1. Scan custom compatibility tools
       for (const compatDir of possibleCompatPaths) {
         if (fs.existsSync(compatDir)) {
           searchedDirs.push(compatDir);
@@ -745,22 +754,56 @@ Return ONLY valid JSON without markdown fences if possible.`,
                 let totalSizeBytes = 0;
                 try {
                   const files = fs.readdirSync(fullPath);
-                  totalSizeBytes = files.length * 1024 * 512; // approximate directory size
+                  totalSizeBytes = files.length * 1024 * 512;
                 } catch {}
 
                 const stat = fs.statSync(fullPath);
 
-                installedRunners.push({
-                  folderName: item.name,
-                  displayTitle,
-                  fullPath,
-                  modifiedTime: stat.mtime,
-                  approxSizeMb: Math.max(120, Math.round(totalSizeBytes / (1024 * 1024))),
-                });
+                if (!installedRunners.some(r => r.displayTitle.toLowerCase() === displayTitle.toLowerCase())) {
+                  installedRunners.push({
+                    folderName: item.name,
+                    displayTitle,
+                    fullPath,
+                    modifiedTime: stat.mtime,
+                    approxSizeMb: Math.max(120, Math.round(totalSizeBytes / (1024 * 1024))),
+                    source: 'compatibilitytools.d',
+                  });
+                }
               }
             }
           } catch (err) {
             console.warn(`Error scanning compat dir ${compatDir}:`, err);
+          }
+        }
+      }
+
+      // 2. Scan steamapps/common for official Proton versions
+      for (const steamAppsDir of possibleSteamAppsPaths) {
+        const commonDir = path.join(steamAppsDir, 'common');
+        if (fs.existsSync(commonDir)) {
+          searchedDirs.push(commonDir);
+          try {
+            const items = fs.readdirSync(commonDir, { withFileTypes: true });
+            for (const item of items) {
+              if (item.isDirectory() && item.name.toLowerCase().startsWith('proton')) {
+                const fullPath = path.join(commonDir, item.name);
+                let displayTitle = item.name.replace(/^Proton\s*-\s*/i, 'Proton ');
+                const stat = fs.statSync(fullPath);
+
+                if (!installedRunners.some(r => r.displayTitle.toLowerCase() === displayTitle.toLowerCase())) {
+                  installedRunners.push({
+                    folderName: item.name,
+                    displayTitle,
+                    fullPath,
+                    modifiedTime: stat.mtime,
+                    approxSizeMb: 1400,
+                    source: 'steamapps/common',
+                  });
+                }
+              }
+            }
+          } catch (err) {
+            console.warn(`Error scanning common dir ${commonDir}:`, err);
           }
         }
       }

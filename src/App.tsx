@@ -16,6 +16,7 @@ import { ScanLocalLibraryModal } from './components/ScanLocalLibraryModal';
 import { ProtonManagerModal } from './components/ProtonManagerModal';
 import { BackupModal } from './components/BackupModal';
 import { SteamGridDbModal } from './components/SteamGridDbModal';
+import { ProtonVersionSelector } from './components/ProtonVersionSelector';
 import { PROTON_FLAGS } from './data/protonFlagsData';
 import { Sparkles, Terminal, Gamepad2, ShieldCheck, CheckCircle2, MessageSquareQuote, Image as ImageIcon } from 'lucide-react';
 
@@ -320,11 +321,24 @@ export default function App() {
                     AppID: {selectedGame.appId}
                   </span>
                 </div>
-                <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-2">
-                  <span>Proton: <strong className="text-cyan-400">{selectedGame.protonVersion}</strong></span>
+                <div className="text-xs text-slate-400 mt-1 flex flex-wrap items-center gap-2">
+                  <div className="flex items-center space-x-1">
+                    <span className="text-slate-400 font-medium">Runner:</span>
+                    <ProtonVersionSelector
+                      value={selectedGame.protonVersion || 'Proton Experimental'}
+                      onChange={(newVersion) => {
+                        setGames((prev) =>
+                          prev.map((g) =>
+                            g.id === selectedGame.id ? { ...g, protonVersion: newVersion } : g
+                          )
+                        );
+                        showToast(`Set Proton version for "${selectedGame.name}" to ${newVersion}`);
+                      }}
+                    />
+                  </div>
                   <span>•</span>
-                  <span>Developer: {selectedGame.developer}</span>
-                </p>
+                  <span>Developer: {selectedGame.developer || 'Valve / Community'}</span>
+                </div>
               </div>
             </div>
 
