@@ -18,13 +18,21 @@ interface ProtonVersionSelectorProps {
 
 const DEFAULT_PROTON_PRESETS = [
   'Proton Experimental',
+  'Proton 9.0',
+  'Proton 9.0-3',
+  'Proton 8.0',
+  'Proton 8.0-5',
+  'Proton 7.0',
+  'Proton 7.0-6',
+  'Proton 6.3-8',
+  'Proton 5.13-9',
+  'Proton Hotfix',
+  'Proton Bleeding Edge',
+  'Proton BattEye Runtime',
+  'Proton EAC Runtime',
   'GE-Proton9-25',
   'GE-Proton9-20',
   'GE-Proton8-32',
-  'Proton 9.0-3',
-  'Proton 8.0-5',
-  'Proton 7.0-6',
-  'Proton Hotfix',
 ];
 
 export const ProtonVersionSelector: React.FC<ProtonVersionSelectorProps> = ({
@@ -64,6 +72,12 @@ export const ProtonVersionSelector: React.FC<ProtonVersionSelectorProps> = ({
     new Set([...installedTitles, ...DEFAULT_PROTON_PRESETS])
   );
 
+  const matchedOption = allKnownOptions.find(
+    (opt) => opt.toLowerCase() === (value || '').toLowerCase()
+  );
+  const selectDisplayValue = matchedOption || value || 'Proton Experimental';
+  const isCurrentValueInOptions = Boolean(matchedOption);
+
   const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const selected = e.target.value;
     if (selected === '__CUSTOM__') {
@@ -83,7 +97,7 @@ export const ProtonVersionSelector: React.FC<ProtonVersionSelectorProps> = ({
   };
 
   const isCurrentValueInstalled = installedTitles.some(
-    (t) => t.toLowerCase() === value.toLowerCase()
+    (t) => t.toLowerCase() === (value || '').toLowerCase()
   );
 
   return (
@@ -117,7 +131,7 @@ export const ProtonVersionSelector: React.FC<ProtonVersionSelectorProps> = ({
         ) : (
           <div className="relative w-full flex items-center">
             <select
-              value={value}
+              value={selectDisplayValue}
               onChange={handleSelectChange}
               className={`w-full bg-slate-950 border ${
                 isCurrentValueInstalled
@@ -125,6 +139,13 @@ export const ProtonVersionSelector: React.FC<ProtonVersionSelectorProps> = ({
                   : 'border-slate-800 text-slate-200'
               } rounded-lg pl-7 pr-7 py-1 text-xs focus:outline-none focus:border-cyan-500 cursor-pointer appearance-none transition`}
             >
+              {/* Active Runner if custom / not in presets */}
+              {!isCurrentValueInOptions && value && (
+                <optgroup label="🎮 Currently Assigned Runner">
+                  <option value={value}>{value}</option>
+                </optgroup>
+              )}
+
               {/* Installed Proton Versions Group */}
               {installedRunners.length > 0 && (
                 <optgroup label="⚡ Installed on System (Detected)">
