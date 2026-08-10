@@ -70,6 +70,38 @@ export default function App() {
     }
   };
 
+  // Auto-fetch missing official Steam release dates and metadata from Steam Store API
+  React.useEffect(() => {
+    const missingDates = games.filter((g) => !g.releaseDate && g.appId > 0);
+    if (missingDates.length === 0) return;
+
+    const appIds = missingDates.map((g) => g.appId);
+    fetch('/api/steam/batch-app-details', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appIds }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.details) {
+          setGames((prev) =>
+            prev.map((g) => {
+              const detail = data.details[g.appId];
+              if (detail && detail.releaseDate) {
+                return {
+                  ...g,
+                  releaseDate: detail.releaseDate,
+                  developer: (!g.developer || g.developer === 'Custom Title') ? (detail.developer || g.developer) : g.developer,
+                };
+              }
+              return g;
+            })
+          );
+        }
+      })
+      .catch((e) => console.warn('Failed fetching Steam release dates:', e));
+  }, [games.length]);
+
   // Update custom artwork cover for a game
   const handleUpdateGameCover = (gameId: string, bannerUrl: string, iconUrl?: string) => {
     setGames((prev) =>

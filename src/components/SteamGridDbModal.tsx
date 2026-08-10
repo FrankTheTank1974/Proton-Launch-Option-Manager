@@ -17,6 +17,7 @@ interface GridOption {
   author?: string;
   style?: string;
   label?: string;
+  isOfficial?: boolean;
 }
 
 export const SteamGridDbModal: React.FC<SteamGridDbModalProps> = ({
@@ -60,22 +61,25 @@ export const SteamGridDbModal: React.FC<SteamGridDbModalProps> = ({
         // Default Steam CDN Fallback grids
         setGrids([
           {
-            id: 'steam_header',
-            url: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${game.appId}/header.jpg`,
-            thumb: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${game.appId}/header.jpg`,
-            label: 'Steam Official Header (Wide)',
+            id: 'steam_capsule',
+            url: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${game.appId}/capsule_616x353.jpg`,
+            thumb: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${game.appId}/capsule_616x353.jpg`,
+            label: 'Steam Official Capsule Art (Store Cover)',
+            isOfficial: true,
           },
           {
             id: 'steam_library_600x900',
             url: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${game.appId}/library_600x900_2x.jpg`,
             thumb: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${game.appId}/library_600x900_2x.jpg`,
-            label: 'Steam Official Grid (Vertical 2:3)',
+            label: 'Steam Official Library Grid (Vertical 2:3)',
+            isOfficial: true,
           },
           {
-            id: 'steam_hero',
-            url: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${game.appId}/library_hero.jpg`,
-            thumb: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${game.appId}/library_hero.jpg`,
-            label: 'Steam Official Hero Banner',
+            id: 'steam_header',
+            url: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${game.appId}/header.jpg`,
+            thumb: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${game.appId}/header.jpg`,
+            label: 'Steam Official Header (Wide)',
+            isOfficial: true,
           },
         ]);
       }
@@ -146,7 +150,23 @@ export const SteamGridDbModal: React.FC<SteamGridDbModalProps> = ({
 
         {/* Quick Actions & Search Bar */}
         <div className="p-3 bg-slate-950/60 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => {
+                const officialCapsule = `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${game.appId}/capsule_616x353.jpg`;
+                const officialGrid = `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${game.appId}/library_600x900_2x.jpg`;
+                setSelectedGridUrl(officialCapsule);
+                setCustomBannerUrl(officialCapsule);
+                setCustomIconUrl(officialGrid);
+                showToast?.('Selected Official Steam Store Capsule Art!');
+              }}
+              className="bg-cyan-950 hover:bg-cyan-900/80 text-cyan-200 border border-cyan-700/60 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm"
+              title="Use official Steam Store Capsule artwork"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Prefer Official Capsule</span>
+            </button>
+
             <a
               href={sgdbSearchUrl}
               target="_blank"
@@ -291,6 +311,11 @@ export const SteamGridDbModal: React.FC<SteamGridDbModalProps> = ({
                           alt={g.label || 'SteamGridDB Grid'}
                           className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
                         />
+                        {g.isOfficial && (
+                          <div className="absolute top-2 left-2 bg-cyan-950/90 text-cyan-300 border border-cyan-500/50 text-[9px] px-1.5 py-0.5 rounded font-mono font-bold shadow-md">
+                            Official Steam
+                          </div>
+                        )}
                         {isSelected && (
                           <div className="absolute top-2 right-2 bg-purple-600 text-white p-1 rounded-full shadow-md">
                             <Check className="w-3.5 h-3.5" />

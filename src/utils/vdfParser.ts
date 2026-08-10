@@ -1,5 +1,44 @@
 import { VdfAppConfig } from '../types';
 
+export function formatProtonToolName(toolName: string): string {
+  if (!toolName) return 'Proton Experimental';
+  const lower = toolName.toLowerCase().trim();
+  if (lower === 'proton_experimental' || lower === 'proton-experimental' || lower === 'experimental') return 'Proton Experimental';
+  if (lower === 'proton_hotfix' || lower === 'proton-hotfix' || lower === 'hotfix') return 'Proton Hotfix';
+  if (lower === 'proton_bleeding_edge') return 'Proton Bleeding Edge';
+  if (lower.startsWith('proton_9') || lower === 'proton-9' || lower === 'proton_9_0') return 'Proton 9.0';
+  if (lower.startsWith('proton_8') || lower === 'proton-8' || lower === 'proton_8_0') return 'Proton 8.0';
+  if (lower.startsWith('proton_7') || lower === 'proton-7' || lower === 'proton_7_0') return 'Proton 7.0';
+  if (lower.startsWith('proton_6') || lower === 'proton-6') return 'Proton 6.3-8';
+  if (lower.startsWith('proton_5') || lower === 'proton-5') return 'Proton 5.13-9';
+  if (lower.includes('battleye')) return 'Proton BattEye Runtime';
+  if (lower.includes('easyanticheat') || lower.includes('eac')) return 'Proton EAC Runtime';
+  if (toolName.startsWith('GE-Proton') || toolName.startsWith('ge-proton')) {
+    return toolName;
+  }
+  if (toolName.startsWith('proton_')) {
+    return toolName.replace('proton_', 'Proton ').replace(/_/g, ' ');
+  }
+  return toolName;
+}
+
+export function parseCompatToolMapping(vdfText: string): Map<string, string> {
+  const map = new Map<string, string>();
+  if (!vdfText) return map;
+
+  const compatBlockMatch = vdfText.match(/"CompatToolMapping"\s*\{([\s\S]*?)\n\s*\}\s*\n/i) || vdfText.match(/"CompatToolMapping"\s*\{([\s\S]*?)\}/i);
+  const textToSearch = compatBlockMatch ? compatBlockMatch[1] : vdfText;
+
+  const entryRegex = /"(\d+)"\s*\{[^}]*?"name"\s*"([^"]+)"/gi;
+  let match;
+  while ((match = entryRegex.exec(textToSearch)) !== null) {
+    const appId = match[1];
+    const toolName = match[2];
+    map.set(appId, formatProtonToolName(toolName));
+  }
+  return map;
+}
+
 export function isSteamRuntimeOrTool(name: string): boolean {
   if (!name) return true;
   const lower = name.toLowerCase().trim();

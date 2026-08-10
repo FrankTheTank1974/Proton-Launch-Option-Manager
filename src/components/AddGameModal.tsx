@@ -39,6 +39,19 @@ export const AddGameModal: React.FC<AddGameModalProps> = ({
   const fetchSteamGridDbArtwork = async (numAppId: number) => {
     setLoadingGrid(true);
     try {
+      // 1. Fetch official Steam App Details for release date & metadata
+      fetch(`/api/steam/app-details/${numAppId}`)
+        .then((res) => res.json())
+        .then((details) => {
+          if (details.success) {
+            if (details.name && !name.trim()) setName(details.name);
+            if (details.releaseDate) setReleaseDate(details.releaseDate);
+            if (details.developer) setDeveloper(details.developer);
+          }
+        })
+        .catch(() => {});
+
+      // 2. Fetch SteamGridDB artwork
       const apiKey = localStorage.getItem('steamgriddb_api_key') || '';
       const url = `/api/steamgriddb/grids/${numAppId}${apiKey ? `?apiKey=${encodeURIComponent(apiKey)}` : ''}`;
       const res = await fetch(url);

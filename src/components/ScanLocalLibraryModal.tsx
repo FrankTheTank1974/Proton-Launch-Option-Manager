@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SteamGame } from '../types';
-import { parseAppManifestAcf, parseLocalConfigVdf, isSteamRuntimeOrTool } from '../utils/vdfParser';
+import { parseAppManifestAcf, parseLocalConfigVdf, parseCompatToolMapping, isSteamRuntimeOrTool } from '../utils/vdfParser';
 import { X, HardDrive, FolderSearch, RefreshCw, CheckCircle2, FolderInput, AlertCircle, Gamepad2, Upload, Sparkles } from 'lucide-react';
 
 interface ScanLocalLibraryModalProps {
@@ -51,7 +51,7 @@ export const ScanLocalLibraryModal: React.FC<ScanLocalLibraryModalProps> = ({
               currentLaunchOptions: g.currentLaunchOptions || '',
               bannerUrl: g.bannerUrl,
               bannerHeroUrl: g.bannerHeroUrl,
-              protonVersion: 'Proton Experimental',
+              protonVersion: g.protonVersion || 'Proton Experimental',
               selected: true,
               source: 'host-scan',
               installDate: g.installDate,

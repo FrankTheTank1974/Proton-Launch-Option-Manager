@@ -104,6 +104,16 @@ GEMINI_API_KEY="your_gemini_api_key_here"
 APP_URL="http://localhost:3000"
 ```
 
+#### 🔑 How to Get a Gemini API Key
+
+You can obtain a free Gemini API key in a few quick steps:
+
+1. Go to **[Google AI Studio](https://aistudio.google.com/app/apikey)** (`https://aistudio.google.com/app/apikey`).
+2. Sign in with your Google Account.
+3. Click **"Create API key"** (or **"Get API key"**).
+4. Choose an existing Google Cloud project or create a new one.
+5. Copy the newly generated API key and set it as `GEMINI_API_KEY` in your `.env` file.
+
 ### 4. Quick Start (One-Click Build, Run & Open Browser)
 
 You can build, start, and automatically launch the application in your default web browser using the helper script:

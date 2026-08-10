@@ -310,7 +310,46 @@ Return ONLY valid JSON.`,
         }
       }
 
+      // Extract Proton tool mappings from config/config.vdf & localconfig.vdf
+      const protonToolMap = new Map<string, string>();
+
+      function formatRunnerName(toolName: string): string {
+        if (!toolName) return 'Proton Experimental';
+        const lower = toolName.toLowerCase().trim();
+        if (lower === 'proton_experimental' || lower === 'proton-experimental' || lower === 'experimental') return 'Proton Experimental';
+        if (lower === 'proton_hotfix' || lower === 'proton-hotfix' || lower === 'hotfix') return 'Proton Hotfix';
+        if (lower === 'proton_bleeding_edge') return 'Proton Bleeding Edge';
+        if (lower.startsWith('proton_9') || lower === 'proton-9' || lower === 'proton_9_0') return 'Proton 9.0';
+        if (lower.startsWith('proton_8') || lower === 'proton-8' || lower === 'proton_8_0') return 'Proton 8.0';
+        if (lower.startsWith('proton_7') || lower === 'proton-7' || lower === 'proton_7_0') return 'Proton 7.0';
+        if (lower.startsWith('proton_6') || lower === 'proton-6') return 'Proton 6.3-8';
+        if (lower.startsWith('proton_5') || lower === 'proton-5') return 'Proton 5.13-9';
+        if (lower.includes('battleye')) return 'Proton BattEye Runtime';
+        if (lower.includes('easyanticheat') || lower.includes('eac')) return 'Proton EAC Runtime';
+        if (toolName.startsWith('GE-Proton') || toolName.startsWith('ge-proton')) return toolName;
+        if (toolName.startsWith('proton_')) return toolName.replace('proton_', 'Proton ').replace(/_/g, ' ');
+        return toolName;
+      }
+
+      function extractCompatToolMappings(vdfText: string) {
+        if (!vdfText) return;
+        const entryRegex = /"(\d+)"\s*\{[^}]*?"name"\s*"([^"]+)"/gi;
+        let match;
+        while ((match = entryRegex.exec(vdfText)) !== null) {
+          const appId = match[1];
+          const toolName = match[2];
+          protonToolMap.set(appId, formatRunnerName(toolName));
+        }
+      }
+
       for (const basePath of possiblePaths) {
+        const configVdf = path.join(basePath, 'config/config.vdf');
+        if (fs.existsSync(configVdf)) {
+          try {
+            extractCompatToolMappings(fs.readFileSync(configVdf, 'utf-8'));
+          } catch {}
+        }
+
         const userDataDir = path.join(basePath, 'userdata');
         if (fs.existsSync(userDataDir)) {
           try {
@@ -320,6 +359,7 @@ Return ONLY valid JSON.`,
               if (fs.existsSync(localConfig)) {
                 try {
                   const vdfText = fs.readFileSync(localConfig, 'utf-8');
+                  extractCompatToolMappings(vdfText);
                   const appIdRegex = /"(\d+)"\s*\{([^}]*)\}/g;
                   let match;
                   while ((match = appIdRegex.exec(vdfText)) !== null) {
@@ -342,10 +382,12 @@ Return ONLY valid JSON.`,
         }
       }
 
+      const globalDefaultProton = protonToolMap.get('0') || 'Proton Experimental';
+
       const detectedGames = Array.from(detectedGamesMap.values())
         .map((g) => ({
           ...g,
-          protonVersion: 'Proton Experimental',
+          protonVersion: protonToolMap.get(String(g.appId)) || globalDefaultProton,
           bannerUrl: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${g.appId}/header.jpg`,
           bannerHeroUrl: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${g.appId}/library_hero.jpg`,
         }))
@@ -369,6 +411,33 @@ Return ONLY valid JSON.`,
     const { appId } = req.params;
     const apiKey = (req.query.apiKey as string) || process.env.STEAMGRIDDB_API_KEY;
 
+    const officialSteamGrids = [
+      {
+        id: 'steam_capsule',
+        url: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/capsule_616x353.jpg`,
+        thumb: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/capsule_616x353.jpg`,
+        label: 'Steam Official Capsule Art (Store Cover)',
+        author: 'Official Steam CDN',
+        isOfficial: true,
+      },
+      {
+        id: 'steam_library_600x900',
+        url: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/library_600x900_2x.jpg`,
+        thumb: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/library_600x900_2x.jpg`,
+        label: 'Steam Official Library Grid (Vertical 2:3)',
+        author: 'Official Steam CDN',
+        isOfficial: true,
+      },
+      {
+        id: 'steam_header',
+        url: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
+        thumb: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
+        label: 'Steam Official Header (Wide)',
+        author: 'Official Steam CDN',
+        isOfficial: true,
+      },
+    ];
+
     if (apiKey) {
       try {
         const gameRes = await fetch(`https://www.steamgriddb.com/api/v2/games/steam/${appId}`, {
@@ -384,18 +453,21 @@ Return ONLY valid JSON.`,
           const gridsData = await gridsRes.json();
 
           if (gridsData.success && Array.isArray(gridsData.data)) {
+            const sgdbGrids = gridsData.data.slice(0, 10).map((g: any) => ({
+              id: String(g.id),
+              url: g.url,
+              thumb: g.thumb || g.url,
+              score: g.score,
+              author: g.author?.name || 'SteamGridDB Creator',
+              style: g.style,
+              label: `SteamGridDB Grid (${g.width}x${g.height} - Score: ${g.score || 0})`,
+              isOfficial: false,
+            }));
+
             return res.json({
               success: true,
               source: 'steamgriddb',
-              grids: gridsData.data.slice(0, 12).map((g: any) => ({
-                id: String(g.id),
-                url: g.url,
-                thumb: g.thumb || g.url,
-                score: g.score,
-                author: g.author?.name || 'SteamGridDB Creator',
-                style: g.style,
-                label: `SteamGridDB Grid (${g.width}x${g.height} - Score: ${g.score || 0})`,
-              })),
+              grids: [...officialSteamGrids, ...sgdbGrids],
             });
           }
         }
@@ -404,38 +476,94 @@ Return ONLY valid JSON.`,
       }
     }
 
-    // Default Fallback: Steam CDN high-res vertical and horizontal grids
+    // Default Fallback: Steam CDN official capsule art and grids
     return res.json({
       success: true,
       source: 'steam_cdn',
-      grids: [
-        {
-          id: 'steam_library_600x900',
-          url: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/library_600x900_2x.jpg`,
-          thumb: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/library_600x900_2x.jpg`,
-          label: 'Steam Official Library Grid (Vertical 2:3)',
-        },
-        {
-          id: 'steam_header',
-          url: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
-          thumb: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
-          label: 'Steam Official Header (Wide)',
-        },
-        {
-          id: 'steam_hero',
-          url: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/library_hero.jpg`,
-          thumb: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/library_hero.jpg`,
-          label: 'Steam Official Hero Banner',
-        },
-        {
-          id: 'steam_capsule',
-          url: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/capsule_616x353.jpg`,
-          thumb: `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${appId}/capsule_616x353.jpg`,
-          label: 'Steam Official Capsule Art',
-        },
-      ],
+      grids: officialSteamGrids,
       steamGridDbUrl: `https://www.steamgriddb.com/search/grids?term=${appId}`,
     });
+  });
+
+  // Steam Official Store App Details Endpoint (release date, developer, etc.)
+  app.get('/api/steam/app-details/:appId', async (req, res) => {
+    const { appId } = req.params;
+    try {
+      const response = await fetch(`https://store.steampowered.com/api/appdetails?appids=${appId}&cc=us&l=en`, {
+        headers: { 'User-Agent': 'ProtonLaunchOptionsManager/1.0' },
+      });
+      if (response.ok) {
+        const json = await response.json();
+        if (json && json[appId] && json[appId].success && json[appId].data) {
+          const data = json[appId].data;
+          let releaseDate = data.release_date?.date || undefined;
+          if (releaseDate) {
+            const parsed = new Date(releaseDate);
+            if (!isNaN(parsed.getTime())) {
+              releaseDate = parsed.toISOString().split('T')[0];
+            }
+          }
+          return res.json({
+            success: true,
+            appId: parseInt(appId, 10),
+            name: data.name,
+            releaseDate,
+            rawReleaseDate: data.release_date?.date,
+            developer: Array.isArray(data.developers) ? data.developers.join(', ') : undefined,
+            publisher: Array.isArray(data.publishers) ? data.publishers.join(', ') : undefined,
+            shortDescription: data.short_description,
+          });
+        }
+      }
+      return res.json({ success: false, appId: parseInt(appId, 10) });
+    } catch (err) {
+      console.warn(`Steam app-details fetch failed for ${appId}:`, err);
+      return res.json({ success: false, appId: parseInt(appId, 10) });
+    }
+  });
+
+  // Batch fetch Steam Store release dates and info for multiple games
+  app.post('/api/steam/batch-app-details', async (req, res) => {
+    const { appIds } = req.body;
+    if (!Array.isArray(appIds)) {
+      return res.status(400).json({ error: 'appIds array required' });
+    }
+
+    const results: Record<number, { releaseDate?: string; developer?: string; name?: string }> = {};
+    const targets = appIds.slice(0, 30);
+
+    await Promise.all(
+      targets.map(async (id) => {
+        try {
+          const response = await fetch(`https://store.steampowered.com/api/appdetails?appids=${id}&cc=us&l=en`, {
+            headers: { 'User-Agent': 'ProtonLaunchOptionsManager/1.0' },
+          });
+          if (response.ok) {
+            const json = await response.json();
+            const key = String(id);
+            if (json && json[key] && json[key].success && json[key].data) {
+              const data = json[key].data;
+              let releaseDate = data.release_date?.date || undefined;
+              if (releaseDate) {
+                const parsed = new Date(releaseDate);
+                if (!isNaN(parsed.getTime())) {
+                  releaseDate = parsed.toISOString().split('T')[0];
+                }
+              }
+              results[id] = {
+                releaseDate,
+                developer: Array.isArray(data.developers) ? data.developers.join(', ') : undefined,
+                name: data.name,
+              };
+            }
+          }
+        } catch {
+          // Ignore individual fetch failure
+        }
+      })
+    );
+
+    return res.json({ success: true, details: results });
   });
 
   // Helper to patch LaunchOptions inside localconfig.vdf text

@@ -242,28 +242,36 @@ export const GameLibraryList: React.FC<GameLibraryListProps> = ({
                     </h3>
                   </div>
 
-                  <div className="flex items-center space-x-2 mt-0.5 text-[11px] text-slate-400 font-mono">
-                    <span className="text-slate-500">ID: {game.appId}</span>
-                    <span>•</span>
-                    <span className="truncate text-cyan-400/90">{game.protonVersion}</span>
-                    {game.releaseDate && (
+                  <div className="flex items-center space-x-1.5 mt-0.5 text-[11px] text-slate-400 font-mono whitespace-nowrap overflow-hidden">
+                    <span className="text-slate-500 flex-shrink-0">ID: {game.appId}</span>
+                    
+                    {(game.releaseDate || game.installDate || game.lastUpdated) && (
                       <>
-                        <span>•</span>
-                        <span className="text-slate-400 font-sans truncate" title="Release date">
-                          {game.releaseDate}
+                        <span className="text-slate-600 flex-shrink-0">•</span>
+                        <span
+                          className="text-slate-300 font-sans flex-shrink-0"
+                          title={game.releaseDate ? `Released: ${game.releaseDate}` : 'Installation / update date'}
+                        >
+                          {game.releaseDate ? (
+                            <span className="text-slate-300 font-medium">Rel: {game.releaseDate}</span>
+                          ) : game.installDate ? (
+                            <span className="text-slate-400">
+                              Inst: {new Date(game.installDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">{game.lastUpdated?.split(' ')[0]}</span>
+                          )}
                         </span>
                       </>
                     )}
-                    {!game.releaseDate && (game.installDate || game.lastUpdated) && (
-                      <>
-                        <span>•</span>
-                        <span className="text-slate-500 truncate" title="Installation / update timestamp">
-                          {game.installDate
-                            ? new Date(game.installDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
-                            : game.lastUpdated?.split(' ')[0]}
-                        </span>
-                      </>
-                    )}
+
+                    <span className="text-slate-600 flex-shrink-0">•</span>
+                    <span
+                      className="truncate text-cyan-400/90 flex-1 min-w-0 font-mono"
+                      title={`Proton Version: ${game.protonVersion}`}
+                    >
+                      {game.protonVersion}
+                    </span>
                   </div>
 
                   {hasCustomOptions && (
