@@ -245,27 +245,59 @@ export const GameLibraryList: React.FC<GameLibraryListProps> = ({
                   <div className="flex items-center space-x-1.5 mt-0.5 text-[11px] text-slate-400 font-mono whitespace-nowrap overflow-hidden">
                     <span className="text-slate-500 flex-shrink-0">ID: {game.appId}</span>
                     
-                    {(game.releaseDate || game.installDate || game.lastUpdated) && (
-                      <>
-                        <span className="text-slate-600 flex-shrink-0">•</span>
-                        <span
-                          className="text-slate-300 font-sans flex-shrink-0"
-                          title={game.releaseDate ? `Released: ${game.releaseDate}` : 'Installation / update date'}
-                        >
-                          {game.releaseDate ? (
-                            <span className="text-slate-300 font-medium">Rel: {game.releaseDate}</span>
-                          ) : game.installDate ? (
-                            <span className="text-slate-400">
-                              Inst: {new Date(game.installDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                            </span>
-                          ) : (
-                            <span className="text-slate-400">{game.lastUpdated?.split(' ')[0]}</span>
-                          )}
-                        </span>
-                      </>
-                    )}
+                    {(() => {
+                      const showInstallDateFirst = sortBy === 'date' || sortBy === 'name' || sortBy === 'id';
+                      let dateLabel: React.ReactNode = null;
 
-                    <span className="text-slate-600 flex-shrink-0">•</span>
+                      if (showInstallDateFirst) {
+                        if (game.installDate || game.lastUpdated) {
+                          const formattedInstall = game.installDate
+                            ? new Date(game.installDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+                            : game.lastUpdated?.split(' ')[0];
+                          dateLabel = (
+                            <span className="text-slate-400 font-sans flex-shrink-0" title={`Installed / Updated: ${formattedInstall}`}>
+                              Inst: {formattedInstall}
+                            </span>
+                          );
+                        } else if (game.releaseDate) {
+                          dateLabel = (
+                            <span className="text-slate-300 font-medium font-sans flex-shrink-0" title={`Released: ${game.releaseDate}`}>
+                              Rel: {game.releaseDate}
+                            </span>
+                          );
+                        }
+                      } else {
+                        if (game.releaseDate) {
+                          dateLabel = (
+                            <span className="text-slate-300 font-medium font-sans flex-shrink-0" title={`Released: ${game.releaseDate}`}>
+                              Rel: {game.releaseDate}
+                            </span>
+                          );
+                        } else if (game.installDate || game.lastUpdated) {
+                          const formattedInstall = game.installDate
+                            ? new Date(game.installDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+                            : game.lastUpdated?.split(' ')[0];
+                          dateLabel = (
+                            <span className="text-slate-400 font-sans flex-shrink-0" title={`Installed / Updated: ${formattedInstall}`}>
+                              Inst: {formattedInstall}
+                            </span>
+                          );
+                        }
+                      }
+
+                      if (!dateLabel) return null;
+
+                      return (
+                        <>
+                          <span className="text-slate-600 flex-shrink-0">•</span>
+                          {dateLabel}
+                        </>
+                      );
+                    })()}
+                  </div>
+
+                  <div className="flex items-center space-x-1 mt-0.5 text-[11px] text-cyan-400/90 font-mono min-w-0">
+                    <span className="text-slate-500 text-[10px] font-sans uppercase tracking-wider flex-shrink-0">Runner:</span>
                     <span
                       className="truncate text-cyan-400/90 flex-1 min-w-0 font-mono"
                       title={`Proton Version: ${game.protonVersion}`}
