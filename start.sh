@@ -7,14 +7,43 @@ chmod +x "$0" 2>/dev/null || chmod +x start.sh 2>/dev/null || true
 PORT="${PORT:-3000}"
 APP_URL="http://localhost:${PORT}"
 
+# Parse command line flags or environment variables for skipping GitHub update & disabling AI Copilot
+SKIP_UPDATE="${SKIP_UPDATE:-false}"
+if [ "${OFFLINE:-false}" = "true" ] || [ "${NO_UPDATE:-false}" = "true" ]; then
+  SKIP_UPDATE=true
+fi
+
+DISABLE_AI="${DISABLE_AI:-false}"
+if [ "${DISABLE_AI_COPILOT:-false}" = "true" ] || [ "${NO_AI:-false}" = "true" ]; then
+  DISABLE_AI=true
+fi
+
+for arg in "$@"; do
+  case $arg in
+    --skip-update|--no-update|-s|--offline)
+      SKIP_UPDATE=true
+      ;;
+    --disable-ai|--no-ai|--no-copilot|--disable-copilot)
+      DISABLE_AI=true
+      ;;
+  esac
+done
+
+if [ "$DISABLE_AI" = "true" ]; then
+  export DISABLE_AI=true
+  echo "🔒 AI Copilot disabled (Enterprise / Restricted AI Mode enabled)."
+fi
+
 echo "=================================================="
 echo " 🎮 Starting Proton Launch Options Manager"
 echo "=================================================="
 
 REINSTALL_REQUIRED=false
 
-# 1. Check for GitHub updates if this is a Git repository
-if [ -d ".git" ] && command -v git >/dev/null 2>&1; then
+# 1. Check for GitHub updates if this is a Git repository and update is not skipped
+if [ "$SKIP_UPDATE" = "true" ]; then
+  echo "⏩ Skipping GitHub update check (skip update option enabled)."
+elif [ -d ".git" ] && command -v git >/dev/null 2>&1; then
   echo "🔍 Checking for updates from GitHub..."
   if git fetch origin >/dev/null 2>&1; then
     CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "main")

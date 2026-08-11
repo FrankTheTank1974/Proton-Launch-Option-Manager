@@ -23,6 +23,7 @@ interface HeaderProps {
   onOpenScanLocalLibrary?: () => void;
   onOpenProtonManager?: () => void;
   onOpenBackup?: () => void;
+  aiEnabled?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -36,6 +37,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenScanLocalLibrary,
   onOpenProtonManager,
   onOpenBackup,
+  aiEnabled = true,
 }) => {
   return (
     <header className="bg-slate-900 border-b border-slate-800 text-white sticky top-0 z-30 shadow-lg">
@@ -137,14 +139,16 @@ export const Header: React.FC<HeaderProps> = ({
             )}
 
             {/* AI Assistant */}
-            <button
-              onClick={onOpenAIAssistant}
-              className="flex items-center space-x-1.5 bg-gradient-to-r from-purple-900/60 to-indigo-900/60 hover:from-purple-800/80 hover:to-indigo-800/80 text-purple-200 border border-purple-700/50 px-3 py-1.5 rounded-lg text-xs font-medium transition shadow-sm"
-              title="Ask Gemini for Proton troubleshooting and flag advice"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-purple-400 animate-pulse" />
-              <span>AI Optimizer</span>
-            </button>
+            {aiEnabled && (
+              <button
+                onClick={onOpenAIAssistant}
+                className="flex items-center space-x-1.5 bg-gradient-to-r from-purple-900/60 to-indigo-900/60 hover:from-purple-800/80 hover:to-indigo-800/80 text-purple-200 border border-purple-700/50 px-3 py-1.5 rounded-lg text-xs font-medium transition shadow-sm"
+                title="Ask Gemini for Proton troubleshooting and flag advice"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-purple-400 animate-pulse" />
+                <span>AI Optimizer</span>
+              </button>
+            )}
 
             {/* C Source Code Generator */}
             <button

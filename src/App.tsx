@@ -24,6 +24,19 @@ export default function App() {
   const [games, setGames] = useState<SteamGame[]>(INITIAL_STEAM_GAMES);
   const [selectedGameId, setSelectedGameId] = useState<string>(INITIAL_STEAM_GAMES[0].id);
   const [distro, setDistro] = useState<string>('Arch / SteamOS');
+  const [aiEnabled, setAiEnabled] = useState<boolean>(true);
+
+  // Fetch AI configuration on mount
+  React.useEffect(() => {
+    fetch('/api/config')
+      .then((res) => res.json())
+      .then((data) => {
+        if (typeof data.aiEnabled === 'boolean') {
+          setAiEnabled(data.aiEnabled);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Currently selected game object
   const selectedGame = useMemo(() => {
@@ -301,6 +314,7 @@ export default function App() {
         onOpenScanLocalLibrary={() => setIsScanLocalLibraryOpen(true)}
         onOpenProtonManager={() => setIsProtonManagerOpen(true)}
         onOpenBackup={() => setIsBackupOpen(true)}
+        aiEnabled={aiEnabled}
       />
 
       {/* Primary Layout Grid */}
@@ -390,13 +404,15 @@ export default function App() {
                 <MessageSquareQuote className="w-3.5 h-3.5 text-amber-400" />
                 <span>ProtonDB Advice</span>
               </button>
-              <button
-                onClick={() => setIsAIAssistantOpen(true)}
-                className="bg-purple-900/40 hover:bg-purple-900/70 text-purple-200 border border-purple-700/50 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-                <span>AI Optimizer</span>
-              </button>
+              {aiEnabled && (
+                <button
+                  onClick={() => setIsAIAssistantOpen(true)}
+                  className="bg-purple-900/40 hover:bg-purple-900/70 text-purple-200 border border-purple-700/50 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                  <span>AI Optimizer</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -452,6 +468,7 @@ export default function App() {
         onClose={() => setIsAIAssistantOpen(false)}
         selectedGame={selectedGame}
         distro={distro}
+        aiEnabled={aiEnabled}
         onApplyRecommendedFlags={(cmd) => {
           handleApplyCommandToGame(cmd);
           const parsed = parseCommandString(cmd);
@@ -472,6 +489,7 @@ export default function App() {
         onClose={() => setIsProtonDbModalOpen(false)}
         selectedGame={selectedGame}
         distro={distro}
+        aiEnabled={aiEnabled}
         onApplyRecommendedFlags={(cmd) => {
           handleApplyCommandToGame(cmd);
           const parsed = parseCommandString(cmd);

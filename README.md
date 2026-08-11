@@ -124,8 +124,40 @@ You can build, start, and automatically launch the application in your default w
 npm run launch
 ```
 
+#### ⏩ Skipping GitHub Updates (Offline Mode)
+If you don't have an active internet connection or prefer not to pull updates from GitHub when starting:
+
+```bash
+# Pass the --skip-update (or -s / --offline) flag
+./start.sh --skip-update
+
+# Or pass it via npm run launch
+npm run launch -- --skip-update
+
+# Or set an environment variable
+SKIP_UPDATE=true ./start.sh
+```
+
+#### 🔒 Disabling AI Copilot (Enterprise / Restricted AI Policy)
+For usage in corporate, work, or enterprise environments where AI usage or external LLM API connections are forbidden:
+
+```bash
+# Pass the --disable-ai (or --no-ai) flag to start.sh
+./start.sh --disable-ai
+
+# Or pass it via npm run launch
+npm run launch -- --disable-ai
+
+# Or set the environment variable in your .env or shell
+DISABLE_AI=true ./start.sh
+```
+
+When AI Copilot is disabled:
+- The **AI Optimizer** button and assistant modal UI options are automatically hidden.
+- All ProtonDB community insights fallback to native offline consensus reports without making any Gemini API requests.
+
 This script will:
-1. **Auto-check GitHub for updates:** If run inside a Git repository, it fetches `origin`, stashes local edits if necessary, and automatically pulls the latest changes before building.
+1. **Auto-check GitHub for updates:** If run inside a Git repository (and not skipped), it fetches `origin`, stashes local edits if necessary, and automatically pulls the latest changes before building.
 2. Verify and install/update npm dependencies if required.
 3. Build the frontend assets and Express backend bundle.
 4. Automatically launch `http://localhost:3000` in your default system browser (`xdg-open`, `open`, `wslview`, or Windows default browser).

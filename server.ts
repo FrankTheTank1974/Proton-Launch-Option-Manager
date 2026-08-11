@@ -11,8 +11,30 @@ async function startServer() {
 
   app.use(express.json());
 
+  const isAiDisabled = () => {
+    const disabled = process.env.DISABLE_AI || process.env.DISABLE_AI_COPILOT || process.env.NO_AI;
+    const enabled = process.env.ENABLE_AI;
+    return (disabled === 'true' || disabled === '1' || enabled === 'false' || enabled === '0');
+  };
+
+  // App & AI Configuration Endpoint
+  app.get('/api/config', (req, res) => {
+    res.json({
+      aiEnabled: !isAiDisabled(),
+      hasApiKey: Boolean(process.env.GEMINI_API_KEY),
+    });
+  });
+
   // Gemini API Endpoint
   app.post('/api/gemini/analyze', async (req, res) => {
+    if (isAiDisabled()) {
+      return res.status(403).json({
+        disabled: true,
+        advice: 'AI Copilot is currently disabled by enterprise policy or environment settings.',
+        recommendedCommand: '%command%',
+      });
+    }
+
     const { gameName, distro, prompt, currentCommand } = req.body;
 
     try {
@@ -96,8 +118,8 @@ Provide a concise, highly technical answer detailing optimal Proton flags (such 
 
     try {
       const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        // Fallback realistic community advice if no API key
+      if (isAiDisabled() || !apiKey) {
+        // Fallback realistic community advice if AI disabled or no API key
         return res.json({
           tier: protonDbTier,
           trending: protonDbTrending,

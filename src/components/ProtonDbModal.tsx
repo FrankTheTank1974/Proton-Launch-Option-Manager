@@ -8,6 +8,7 @@ interface ProtonDbModalProps {
   selectedGame: SteamGame;
   distro: string;
   onApplyRecommendedFlags: (commandStr: string) => void;
+  aiEnabled?: boolean;
 }
 
 interface ProtonDbResult {
@@ -25,6 +26,7 @@ export const ProtonDbModal: React.FC<ProtonDbModalProps> = ({
   selectedGame,
   distro,
   onApplyRecommendedFlags,
+  aiEnabled = true,
 }) => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ProtonDbResult | null>(null);
@@ -100,9 +102,15 @@ export const ProtonDbModal: React.FC<ProtonDbModalProps> = ({
             <div>
               <div className="flex items-center space-x-2">
                 <h2 className="text-base font-bold text-slate-100">ProtonDB Community Insights</h2>
-                <span className="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full font-semibold border border-purple-500/30 flex items-center gap-1">
-                  <Sparkles className="w-3 h-3" /> AI Analyzed Comments
-                </span>
+                {aiEnabled ? (
+                  <span className="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full font-semibold border border-purple-500/30 flex items-center gap-1">
+                    <Sparkles className="w-3 h-3" /> AI Analyzed Comments
+                  </span>
+                ) : (
+                  <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-semibold border border-amber-500/30 flex items-center gap-1">
+                    Community Consensus
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-400">Synthesizing launch flag advice from real Linux gamer reports on ProtonDB</p>
             </div>
@@ -162,7 +170,9 @@ export const ProtonDbModal: React.FC<ProtonDbModalProps> = ({
               <Loader2 className="w-8 h-8 animate-spin" />
               <p className="font-semibold text-slate-200 text-sm">Scanning ProtonDB user reports and community comments...</p>
               <p className="text-slate-400 text-xs text-center max-w-md">
-                Gemini is extracting tested Proton launch flags, environment variables, and framerate tweaks reported by gamers on Linux.
+                {aiEnabled
+                  ? 'Gemini is extracting tested Proton launch flags, environment variables, and framerate tweaks reported by gamers on Linux.'
+                  : 'Retrieving community tested Proton launch flags, environment variables, and framerate tweaks reported by gamers on Linux.'}
               </p>
             </div>
           )}

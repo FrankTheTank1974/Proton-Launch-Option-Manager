@@ -8,6 +8,7 @@ interface GeminiAssistantModalProps {
   selectedGame: SteamGame;
   distro: string;
   onApplyRecommendedFlags: (commandStr: string) => void;
+  aiEnabled?: boolean;
 }
 
 export const GeminiAssistantModal: React.FC<GeminiAssistantModalProps> = ({
@@ -16,6 +17,7 @@ export const GeminiAssistantModal: React.FC<GeminiAssistantModalProps> = ({
   selectedGame,
   distro,
   onApplyRecommendedFlags,
+  aiEnabled = true,
 }) => {
   const [prompt, setPrompt] = useState(
     `How can I fix micro-stutter and boost FPS for ${selectedGame.name} on ${distro} using Proton flags?`
@@ -96,23 +98,29 @@ export const GeminiAssistantModal: React.FC<GeminiAssistantModalProps> = ({
 
         {/* Query Input */}
         <div className="p-4 bg-slate-950/50 border-b border-slate-800">
-          <form onSubmit={handleAsk} className="flex items-center space-x-2">
-            <input
-              type="text"
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder="Ask about Proton flags, crashing, or FPS optimizations..."
-              className="flex-1 bg-slate-900 border border-slate-800 focus:border-purple-500 rounded-xl px-3.5 py-2 text-xs text-slate-200 focus:outline-none"
-            />
-            <button
-              type="submit"
-              disabled={loading}
-              className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition disabled:opacity-50"
-            >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              <span>Ask AI</span>
-            </button>
-          </form>
+          {!aiEnabled ? (
+            <div className="bg-amber-950/30 border border-amber-800/50 text-amber-200 text-xs px-3.5 py-2.5 rounded-xl flex items-center justify-between">
+              <span>🔒 AI Copilot is currently disabled by environment settings or enterprise policy.</span>
+            </div>
+          ) : (
+            <form onSubmit={handleAsk} className="flex items-center space-x-2">
+              <input
+                type="text"
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="Ask about Proton flags, crashing, or FPS optimizations..."
+                className="flex-1 bg-slate-900 border border-slate-800 focus:border-purple-500 rounded-xl px-3.5 py-2 text-xs text-slate-200 focus:outline-none"
+              />
+              <button
+                type="submit"
+                disabled={loading}
+                className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition disabled:opacity-50"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                <span>Ask AI</span>
+              </button>
+            </form>
+          )}
         </div>
 
         {/* AI Output */}
