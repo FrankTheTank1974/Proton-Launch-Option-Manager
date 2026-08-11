@@ -55,7 +55,43 @@ fi
 echo "🔨 Building production distribution..."
 npm run build
 
-# 4. Helper function to open default system browser
+# 4. Check for an available port starting from requested PORT or default 3000
+INITIAL_PORT="${PORT:-3000}"
+if command -v node >/dev/null 2>&1; then
+  FREE_PORT=$(PORT="$INITIAL_PORT" node -e '
+    const net = require("net");
+    function checkPort(port) {
+      return new Promise((resolve) => {
+        const server = net.createServer();
+        server.once("error", () => resolve(false));
+        server.once("listening", () => {
+          server.close(() => resolve(true));
+        });
+        server.listen(port, "0.0.0.0");
+      });
+    }
+    (async () => {
+      let p = parseInt(process.env.PORT || "3000", 10);
+      while (!(await checkPort(p))) {
+        p++;
+      }
+      console.log(p);
+    })();
+  ' 2>/dev/null || echo "$INITIAL_PORT")
+
+  if [ -n "$FREE_PORT" ]; then
+    PORT="$FREE_PORT"
+  fi
+fi
+
+if [ "$PORT" != "$INITIAL_PORT" ]; then
+  echo "⚠️ Port ${INITIAL_PORT} is already in use. Selected available port: ${PORT}"
+fi
+
+export PORT
+APP_URL="http://localhost:${PORT}"
+
+# 5. Helper function to open default system browser
 open_browser() {
   # Wait for server to boot up
   sleep 1.5
@@ -76,6 +112,6 @@ open_browser() {
 # Launch browser in background task
 open_browser &
 
-# 5. Start Node.js server
+# 6. Start Node.js server
 echo "🚀 Application running at ${APP_URL}"
 npm start
