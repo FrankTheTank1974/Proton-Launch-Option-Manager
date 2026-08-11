@@ -62,8 +62,8 @@ A modern, full-stack Linux gaming utility built with **React**, **TypeScript**, 
 Clone the repository and install dependencies:
 
 ```bash
-git clone https://github.com/your-username/proton-launch-options-manager.git
-cd proton-launch-options-manager
+git clone https://github.com/FrankTheTank1974/Proton-Launch-Option-Manager.git
+cd Proton-Launch-Option-Manager
 npm install
 ```
 
