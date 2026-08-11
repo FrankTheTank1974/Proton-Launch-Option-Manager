@@ -124,6 +124,28 @@ Provide a concise, highly technical answer detailing optimal Proton flags (such 
           tier: protonDbTier,
           trending: protonDbTrending,
           summary: `ProtonDB community reports for **${gameName}** indicate solid stability on Linux and Steam Deck when using community-tested launch flags.`,
+          suggestions: [
+            {
+              title: "Kernel Thread Synchronization",
+              description: "Sets PROTON_USE_NTSYNC=1 to eliminate CPU overhead and frame micro-stuttering.",
+              flag: "PROTON_USE_NTSYNC=1",
+            },
+            {
+              title: "Ray Tracing & DX12 Mapping",
+              description: "Configures VKD3D_CONFIG=dxr11,dxr and PROTON_ENABLE_NVAPI=1 for DirectX 12 features.",
+              flag: "PROTON_ENABLE_NVAPI=1 VKD3D_CONFIG=dxr11,dxr",
+            },
+            {
+              title: "GameMode CPU Governor",
+              description: "Wraps launch command with gamemoderun to prioritize CPU frequency scaling.",
+              flag: "gamemoderun",
+            },
+            {
+              title: "MangoHud Performance Overlay",
+              description: "Wraps launch command with mangohud to monitor FPS and frametimes.",
+              flag: "mangohud",
+            },
+          ],
           commentsAdvice: [
             `**Kernel Thread Synchronization:** Many user reports recommend setting \`PROTON_USE_NTSYNC=1\` (or \`PROTON_NO_ESYNC=1\`) to eliminate frame stuttering in dense areas.`,
             `**Ray Tracing & Graphics:** Comments from AMD and NVIDIA GPU testers suggest configuring \`VKD3D_CONFIG=dxr11,dxr\` and \`PROTON_ENABLE_NVAPI=1\` for proper DirectX 12 feature mapping.`,
@@ -152,7 +174,11 @@ Return a JSON object with:
 - "tier": Estimated ProtonDB Tier string (e.g. "Platinum", "Gold", "Silver", "Bronze", or "${protonDbTier}").
 - "trending": Recent trending tier (e.g. "Platinum" or "${protonDbTrending}").
 - "summary": A 2-sentence summary of overall ProtonDB community feedback and stability reports for this title.
-- "commentsAdvice": An array of 3 to 5 markdown formatted strings summarizing specific advice, fixes, and launch flags recommended by testers in their comments.
+- "suggestions": An array of 3 to 5 objects representing modular launch flag recommendations, each having:
+  - "title": Short title (e.g. "Kernel Synchronization")
+  - "description": Explanation of the fix
+  - "flag": The exact env var or wrapper string (e.g. "PROTON_USE_NTSYNC=1")
+- "commentsAdvice": An array of 3 to 5 markdown formatted strings summarizing specific advice, fixes, and launch flags.
 - "recommendedCommand": A single optimized launch command string combining the consensus flags reported by users (must end with %command%).
 - "sourceUrl": The ProtonDB URL ("https://www.protondb.com/app/${appId || ''}").
 

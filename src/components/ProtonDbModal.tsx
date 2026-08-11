@@ -1,6 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { SteamGame } from '../types';
-import { X, MessageSquareQuote, ExternalLink, Zap, Loader2, Sparkles, CheckCircle2, ShieldCheck, AlertCircle, TrendingUp } from 'lucide-react';
+import {
+  X,
+  MessageSquareQuote,
+  ExternalLink,
+  Zap,
+  Loader2,
+  Sparkles,
+  CheckCircle2,
+  ShieldCheck,
+  AlertCircle,
+  TrendingUp,
+  Check,
+  CheckSquare,
+  Square,
+  Copy,
+  RotateCcw,
+} from 'lucide-react';
 
 interface ProtonDbModalProps {
   isOpen: boolean;
@@ -11,10 +27,19 @@ interface ProtonDbModalProps {
   aiEnabled?: boolean;
 }
 
+interface SelectableSuggestion {
+  id: string;
+  title: string;
+  description: string;
+  flag: string;
+  enabled: boolean;
+}
+
 interface ProtonDbResult {
   tier: string;
   trending: string;
   summary: string;
+  suggestions?: { title: string; description: string; flag: string }[];
   commentsAdvice: string[];
   recommendedCommand: string;
   sourceUrl: string;
@@ -30,7 +55,57 @@ export const ProtonDbModal: React.FC<ProtonDbModalProps> = ({
 }) => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ProtonDbResult | null>(null);
+  const [suggestions, setSuggestions] = useState<SelectableSuggestion[]>([]);
+  const [synthesizedCommand, setSynthesizedCommand] = useState<string>('%command%');
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const buildCommandFromSuggestions = (items: SelectableSuggestion[], fallbackCmd?: string): string => {
+    const activeItems = items.filter((item) => item.enabled && item.flag && item.flag.trim());
+    if (activeItems.length === 0) {
+      return fallbackCmd || '%command%';
+    }
+
+    const envVars: string[] = [];
+    const wrappers: string[] = [];
+
+    activeItems.forEach((item) => {
+      const tokens = item.flag.trim().split(/\s+/);
+      tokens.forEach((token) => {
+        if (!token || token === '%command%') return;
+        if (token.includes('=')) {
+          if (!envVars.includes(token)) envVars.push(token);
+        } else {
+          if (!wrappers.includes(token)) wrappers.push(token);
+        }
+      });
+    });
+
+    return [...envVars, ...wrappers, '%command%'].join(' ');
+  };
+
+  const parseCommentsAdviceToSuggestions = (commentsAdvice: string[]): SelectableSuggestion[] => {
+    return commentsAdvice.map((advice, idx) => {
+      const titleMatch = advice.match(/\*\*([^*]+)\*\*/);
+      const title = titleMatch ? titleMatch[1].replace(/:$/, '') : `Recommendation #${idx + 1}`;
+      
+      const description = advice
+        .replace(/\*\*([^*]+)\*\*/g, '$1')
+        .replace(/`([^`]+)`/g, '$1')
+        .trim();
+
+      const codeMatches = Array.from(advice.matchAll(/`([^`]+)`/g)).map((m) => m[1]);
+      const flag = codeMatches.filter((c) => c !== '%command%').join(' ') || '';
+
+      return {
+        id: `adv-${idx}`,
+        title,
+        description,
+        flag,
+        enabled: true,
+      };
+    });
+  };
 
   const fetchInsights = async () => {
     setLoading(true);
@@ -47,17 +122,51 @@ export const ProtonDbModal: React.FC<ProtonDbModalProps> = ({
       });
 
       if (res.ok) {
-        const data = await res.json();
+        const data: ProtonDbResult = await res.json();
         setResult(data);
+
+        let initialSuggestions: SelectableSuggestion[] = [];
+        if (data.suggestions && Array.isArray(data.suggestions) && data.suggestions.length > 0) {
+          initialSuggestions = data.suggestions.map((s, idx) => ({
+            id: `sug-${idx}`,
+            title: s.title || `Suggestion #${idx + 1}`,
+            description: s.description || s.flag || '',
+            flag: s.flag || '',
+            enabled: true,
+          }));
+        } else if (data.commentsAdvice && Array.isArray(data.commentsAdvice)) {
+          initialSuggestions = parseCommentsAdviceToSuggestions(data.commentsAdvice);
+        }
+
+        setSuggestions(initialSuggestions);
+        const cmd = buildCommandFromSuggestions(initialSuggestions, data.recommendedCommand);
+        setSynthesizedCommand(cmd);
       } else {
         throw new Error('Failed to fetch ProtonDB insights');
       }
     } catch (err) {
       setError('Could not retrieve ProtonDB community comments at this moment. Using static offline recommendations.');
-      setResult({
+      const fallbackData: ProtonDbResult = {
         tier: 'Gold',
         trending: 'Gold',
         summary: `ProtonDB community consensus for ${selectedGame.name} confirms high playability with minor flag optimizations.`,
+        suggestions: [
+          {
+            title: 'Kernel Thread Synchronization',
+            description: 'Sets PROTON_USE_NTSYNC=1 to eliminate CPU overhead and frame micro-stuttering.',
+            flag: 'PROTON_USE_NTSYNC=1',
+          },
+          {
+            title: 'Ray Tracing & DX12 Mapping',
+            description: 'Configures VKD3D_CONFIG=dxr11,dxr and PROTON_ENABLE_NVAPI=1 for DirectX 12 features.',
+            flag: 'PROTON_ENABLE_NVAPI=1 VKD3D_CONFIG=dxr11,dxr',
+          },
+          {
+            title: 'GameMode CPU Governor',
+            description: 'Wraps launch command with gamemoderun to prioritize CPU frequency scaling.',
+            flag: 'gamemoderun',
+          },
+        ],
         commentsAdvice: [
           `**Kernel Synchronization:** User comments strongly recommend \`PROTON_USE_NTSYNC=1\` to prevent micro-stuttering on Linux.`,
           `**CPU & GPU Governor:** Many Linux reports wrap the command in \`gamemoderun %command%\` for consistent frame timing.`,
@@ -65,7 +174,18 @@ export const ProtonDbModal: React.FC<ProtonDbModalProps> = ({
         ],
         recommendedCommand: `PROTON_USE_NTSYNC=1 VKD3D_CONFIG=dxr11,dxr gamemoderun %command%`,
         sourceUrl: `https://www.protondb.com/app/${selectedGame.appId}`,
-      });
+      };
+
+      setResult(fallbackData);
+      const fallbackSuggestions: SelectableSuggestion[] = fallbackData.suggestions!.map((s, idx) => ({
+        id: `fb-${idx}`,
+        title: s.title,
+        description: s.description,
+        flag: s.flag,
+        enabled: true,
+      }));
+      setSuggestions(fallbackSuggestions);
+      setSynthesizedCommand(buildCommandFromSuggestions(fallbackSuggestions, fallbackData.recommendedCommand));
     } finally {
       setLoading(false);
     }
@@ -79,6 +199,36 @@ export const ProtonDbModal: React.FC<ProtonDbModalProps> = ({
 
   if (!isOpen) return null;
 
+  const toggleSuggestion = (id: string) => {
+    setSuggestions((prev) => {
+      const next = prev.map((item) => (item.id === id ? { ...item, enabled: !item.enabled } : item));
+      setSynthesizedCommand(buildCommandFromSuggestions(next, result?.recommendedCommand));
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    setSuggestions((prev) => {
+      const next = prev.map((item) => ({ ...item, enabled: true }));
+      setSynthesizedCommand(buildCommandFromSuggestions(next, result?.recommendedCommand));
+      return next;
+    });
+  };
+
+  const deselectAll = () => {
+    setSuggestions((prev) => {
+      const next = prev.map((item) => ({ ...item, enabled: false }));
+      setSynthesizedCommand(buildCommandFromSuggestions(next, '%command%'));
+      return next;
+    });
+  };
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(synthesizedCommand);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const getTierColor = (tier: string) => {
     const t = tier.toLowerCase();
     if (t === 'platinum') return 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40';
@@ -88,6 +238,8 @@ export const ProtonDbModal: React.FC<ProtonDbModalProps> = ({
     if (t === 'borked') return 'bg-red-500/20 text-red-300 border-red-500/40';
     return 'bg-purple-500/20 text-purple-300 border-purple-500/40';
   };
+
+  const enabledCount = suggestions.filter((s) => s.enabled).length;
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -197,28 +349,74 @@ export const ProtonDbModal: React.FC<ProtonDbModalProps> = ({
                 </p>
               </div>
 
-              {/* Specific Comment Advice & Flags */}
-              <div className="space-y-2.5">
-                <h4 className="font-bold text-slate-200 text-xs uppercase tracking-wider text-slate-400">
-                  Key Flag Suggestions Extracted from User Comments:
-                </h4>
-                <div className="grid grid-cols-1 gap-2.5">
-                  {result.commentsAdvice.map((advice, idx) => (
-                    <div
-                      key={idx}
-                      className="bg-slate-950/80 border border-slate-800 hover:border-amber-500/30 p-3 rounded-xl transition flex items-start space-x-3"
+              {/* Checkmark Selection Section */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
+                  <div className="flex items-center space-x-2">
+                    <h4 className="font-bold text-slate-200 text-xs uppercase tracking-wider text-slate-400">
+                      Select Flag Suggestions to Include:
+                    </h4>
+                    <span className="bg-amber-500/10 text-amber-300 border border-amber-500/20 text-[10px] px-2 py-0.5 rounded-full font-mono font-semibold">
+                      {enabledCount} of {suggestions.length} selected
+                    </span>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={selectAll}
+                      className="text-[11px] text-amber-400 hover:text-amber-300 bg-slate-950 hover:bg-slate-800 border border-slate-800 px-2.5 py-1 rounded-lg transition font-medium flex items-center gap-1"
                     >
-                      <div className="w-6 h-6 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center font-mono font-bold text-amber-400 flex-shrink-0 mt-0.5">
-                        {idx + 1}
-                      </div>
+                      <CheckSquare className="w-3.5 h-3.5" />
+                      <span>Select All</span>
+                    </button>
+                    <button
+                      onClick={deselectAll}
+                      className="text-[11px] text-slate-400 hover:text-slate-200 bg-slate-950 hover:bg-slate-800 border border-slate-800 px-2.5 py-1 rounded-lg transition font-medium flex items-center gap-1"
+                    >
+                      <Square className="w-3.5 h-3.5" />
+                      <span>Deselect All</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2.5">
+                  {suggestions.map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => toggleSuggestion(item.id)}
+                      className={`p-3 rounded-xl border transition cursor-pointer select-none flex items-start space-x-3.5 ${
+                        item.enabled
+                          ? 'bg-amber-950/20 border-amber-500/40 hover:border-amber-500/60 shadow-sm'
+                          : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 opacity-60'
+                      }`}
+                    >
+                      {/* Checkmark Button */}
                       <div
-                        className="text-slate-300 text-xs flex-1 leading-normal"
-                        dangerouslySetInnerHTML={{
-                          __html: advice
-                            .replace(/`([^`]+)`/g, '<code class="bg-slate-900 text-amber-300 px-1.5 py-0.5 rounded border border-slate-700 font-mono text-[11px]">$1</code>')
-                            .replace(/\*\*([^*]+)\*\*/g, '<strong class="text-slate-100 font-semibold">$1</strong>')
-                        }}
-                      />
+                        className={`w-5 h-5 rounded-md border flex items-center justify-center flex-shrink-0 mt-0.5 transition ${
+                          item.enabled
+                            ? 'bg-amber-500 border-amber-400 text-slate-950 shadow-sm'
+                            : 'bg-slate-900 border-slate-700 text-transparent'
+                        }`}
+                      >
+                        <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <span className={`font-bold text-xs ${item.enabled ? 'text-amber-200' : 'text-slate-400'}`}>
+                            {item.title}
+                          </span>
+                          {item.flag && (
+                            <code className="bg-slate-900 text-amber-300 border border-slate-800 px-2 py-0.5 rounded font-mono text-[11px]">
+                              {item.flag}
+                            </code>
+                          )}
+                        </div>
+                        <p className={`text-xs leading-normal ${item.enabled ? 'text-slate-300' : 'text-slate-500'}`}>
+                          {item.description}
+                        </p>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -227,34 +425,49 @@ export const ProtonDbModal: React.FC<ProtonDbModalProps> = ({
           )}
         </div>
 
-        {/* Footer with Consensus Launch Command */}
+        {/* Footer with Synthesized Launch Command */}
         {!loading && result && (
           <div className="p-4 bg-slate-950 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="flex-1 w-full sm:w-auto overflow-hidden">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">
-                Synthesized Community Launch Command:
-              </span>
-              <div className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 font-mono text-cyan-400 text-xs truncate">
-                {result.recommendedCommand}
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] uppercase font-bold text-slate-400">
+                  Synthesized Selected Command:
+                </span>
+                <button
+                  onClick={copyToClipboard}
+                  className="text-[10px] text-slate-400 hover:text-amber-300 flex items-center gap-1 transition"
+                  title="Copy command to clipboard"
+                >
+                  <Copy className="w-3 h-3" />
+                  <span>{copied ? 'Copied!' : 'Copy'}</span>
+                </button>
               </div>
+              <input
+                type="text"
+                value={synthesizedCommand}
+                onChange={(e) => setSynthesizedCommand(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 font-mono text-cyan-400 text-xs focus:outline-none focus:border-amber-500 transition"
+              />
             </div>
 
-            <div className="flex items-center space-x-2 w-full sm:w-auto justify-end flex-shrink-0">
+            <div className="flex items-center space-x-2 w-full sm:w-auto justify-end flex-shrink-0 pt-2 sm:pt-0">
               <button
                 onClick={fetchInsights}
-                className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-xl text-xs font-semibold transition"
+                className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-1.5"
+                title="Re-run ProtonDB report analysis"
               >
-                Refresh Analysis
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Refresh</span>
               </button>
               <button
                 onClick={() => {
-                  onApplyRecommendedFlags(result.recommendedCommand);
+                  onApplyRecommendedFlags(synthesizedCommand);
                   onClose();
                 }}
                 className="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition shadow-lg shadow-amber-900/30"
               >
                 <Zap className="w-4 h-4 fill-current" />
-                <span>Apply Community Flags</span>
+                <span>Apply Selected ({enabledCount})</span>
               </button>
             </div>
           </div>
@@ -263,3 +476,4 @@ export const ProtonDbModal: React.FC<ProtonDbModalProps> = ({
     </div>
   );
 };
+
