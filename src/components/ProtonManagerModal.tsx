@@ -68,7 +68,8 @@ interface InstalledRunner {
   displayTitle: string;
   fullPath: string;
   modifiedTime: string;
-  approxSizeMb: number;
+  approxSizeMb?: number;
+  approxSizeFormatted?: string;
   source?: string;
 }
 
@@ -129,7 +130,10 @@ export const ProtonManagerModal: React.FC<ProtonManagerModalProps> = ({
       const res = await fetch(`/api/proton-runners/releases?provider=${provider}`);
       const data = await res.json();
       if (data.success) {
-        setReleases(data.releases || []);
+        const downloadable = (data.releases || []).filter(
+          (rel: ProtonRelease) => rel.asset && rel.asset.downloadUrl && rel.allAssets && rel.allAssets.length > 0
+        );
+        setReleases(downloadable);
         if (data.hostSystem) {
           setHostSystem(data.hostSystem);
         }
@@ -262,9 +266,16 @@ export const ProtonManagerModal: React.FC<ProtonManagerModalProps> = ({
   };
 
   const formatMb = (bytes?: number) => {
-    if (!bytes) return 'Unknown size';
-    const mb = Math.round(bytes / (1024 * 1024));
-    return `${mb} MB`;
+    if (bytes === undefined || bytes === null || bytes <= 0) return 'Unknown size';
+    if (bytes < 1024 * 1024) {
+      const kb = (bytes / 1024).toFixed(1);
+      return `${kb} KB`;
+    }
+    const mb = bytes / (1024 * 1024);
+    if (mb >= 1000) {
+      return `${(mb / 1024).toFixed(2)} GB`;
+    }
+    return `${mb.toFixed(1)} MB`;
   };
 
   const getProviderBadge = (providerKey: string) => {
@@ -273,6 +284,12 @@ export const ProtonManagerModal: React.FC<ProtonManagerModalProps> = ({
         return <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">🔥 GE-Proton</span>;
       case 'cachyos':
         return <span className="bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">⚡ Proton-CachyOS</span>;
+      case 'luxtorpeda':
+        return <span className="bg-rose-500/10 text-rose-400 border border-rose-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">🚀 Luxtorpeda</span>;
+      case 'boxtron':
+        return <span className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">📦 Boxtron</span>;
+      case 'roberta':
+        return <span className="bg-fuchsia-500/10 text-fuchsia-400 border border-fuchsia-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">📜 Roberta</span>;
       case 'em':
         return <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">🐺 Proton-EM</span>;
       case 'dw':
@@ -497,6 +514,9 @@ export const ProtonManagerModal: React.FC<ProtonManagerModalProps> = ({
                   { id: 'all', label: 'All Providers' },
                   { id: 'ge', label: '🔥 GE-Proton' },
                   { id: 'cachyos', label: '⚡ Proton-CachyOS' },
+                  { id: 'luxtorpeda', label: '🚀 Luxtorpeda' },
+                  { id: 'boxtron', label: '📦 Boxtron' },
+                  { id: 'roberta', label: '📜 Roberta' },
                   { id: 'em', label: '🐺 Proton-EM' },
                   { id: 'dw', label: '🛠️ Proton-DW' },
                 ].map((p) => (
@@ -617,42 +637,45 @@ export const ProtonManagerModal: React.FC<ProtonManagerModalProps> = ({
                         </div>
 
                         {/* Multiple Build Variants Selector */}
-                        {rel.allAssets && rel.allAssets.length > 1 && (
-                          <div className="pt-2 border-t border-slate-900/80 flex items-center gap-2 flex-wrap text-xs">
-                            <span className="text-slate-400 text-[11px] font-semibold flex items-center gap-1">
-                              <Cpu className="w-3.5 h-3.5 text-cyan-400" /> Build Variants:
-                            </span>
-                            {rel.allAssets.map((a) => {
-                              const isSelected = activeAsset?.downloadUrl === a.downloadUrl;
-                              return (
-                                <button
-                                  key={a.downloadUrl}
-                                  onClick={() => setSelectedAssetOverrides(prev => ({ ...prev, [rel.id]: a }))}
-                                  className={`px-2.5 py-1 rounded-lg text-[11px] font-mono transition flex items-center gap-1 border ${
-                                    isSelected
-                                      ? 'bg-cyan-950 text-cyan-300 border-cyan-500 font-bold shadow-sm'
-                                      : a.isCompatible
-                                      ? 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
-                                      : 'bg-red-950/40 hover:bg-red-900/40 text-red-300 border-red-800/60'
-                                  }`}
-                                  title={a.name}
-                                >
-                                  <span>{a.archTag}</span>
-                                  {a.isRecommended && (
-                                    <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1 py-0.2 rounded font-sans font-bold">
-                                      Best
-                                    </span>
-                                  )}
-                                  {!a.isCompatible && (
-                                    <span className="text-[9px] bg-red-500/20 text-red-300 px-1 py-0.2 rounded font-sans">
-                                      Mismatched Arch
-                                    </span>
-                                  )}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
+                        {rel.allAssets && rel.allAssets.length > 1 && (() => {
+                          const hasDuplicateTags = new Set(rel.allAssets.map((a: any) => a.archTag)).size < rel.allAssets.length;
+                          return (
+                            <div className="pt-2 border-t border-slate-900/80 flex items-center gap-2 flex-wrap text-xs">
+                              <span className="text-slate-400 text-[11px] font-semibold flex items-center gap-1">
+                                <Cpu className="w-3.5 h-3.5 text-cyan-400" /> Build Variants:
+                              </span>
+                              {rel.allAssets.map((a) => {
+                                const isSelected = activeAsset?.downloadUrl === a.downloadUrl;
+                                return (
+                                  <button
+                                    key={a.downloadUrl}
+                                    onClick={() => setSelectedAssetOverrides(prev => ({ ...prev, [rel.id]: a }))}
+                                    className={`px-2.5 py-1 rounded-lg text-[11px] font-mono transition flex items-center gap-1 border ${
+                                      isSelected
+                                        ? 'bg-cyan-950 text-cyan-300 border-cyan-500 font-bold shadow-sm'
+                                        : a.isCompatible
+                                        ? 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
+                                        : 'bg-red-950/40 hover:bg-red-900/40 text-red-300 border-red-800/60'
+                                    }`}
+                                    title={a.name}
+                                  >
+                                    <span>{hasDuplicateTags ? a.name : a.archTag}</span>
+                                    {a.isRecommended && (
+                                      <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1 py-0.2 rounded font-sans font-bold">
+                                        Best
+                                      </span>
+                                    )}
+                                    {!a.isCompatible && (
+                                      <span className="text-[9px] bg-red-500/20 text-red-300 px-1 py-0.2 rounded font-sans">
+                                        Mismatched Arch
+                                      </span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
 
                         {/* Inline progress display for this specific release */}
                         {isInstallingThis && activeProgress && activeProgress.relId === rel.id && (
@@ -698,7 +721,7 @@ export const ProtonManagerModal: React.FC<ProtonManagerModalProps> = ({
                 <div className="bg-slate-950 border border-slate-800 rounded-xl p-8 text-center space-y-2">
                   <FolderCheck className="w-8 h-8 text-slate-500 mx-auto" />
                   <p className="text-sm font-semibold text-slate-300">No custom Proton runners detected in compatibilitytools.d.</p>
-                  <p className="text-xs text-slate-500">Switch to the "Available Releases" tab above to install GE-Proton, Proton-CachyOS, or EM-Proton with 1-click.</p>
+                  <p className="text-xs text-slate-500">Switch to the "Available Releases" tab above to install GE-Proton, Proton-CachyOS, Luxtorpeda, Boxtron, Roberta, or Proton-EM with 1-click.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -727,7 +750,7 @@ export const ProtonManagerModal: React.FC<ProtonManagerModalProps> = ({
 
                       <div className="flex items-center space-x-3 flex-shrink-0 self-end sm:self-center">
                         <span className="text-xs font-semibold text-slate-400 bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-lg flex-shrink-0">
-                          ~{runner.approxSizeMb} MB
+                          ~{runner.approxSizeFormatted || (runner.approxSizeMb ? `${runner.approxSizeMb} MB` : 'Unknown size')}
                         </span>
 
                         <button
