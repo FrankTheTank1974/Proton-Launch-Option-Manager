@@ -7,7 +7,7 @@ chmod +x "$0" 2>/dev/null || chmod +x start.sh 2>/dev/null || true
 PORT="${PORT:-3000}"
 APP_URL="http://localhost:${PORT}"
 
-# Parse command line flags or environment variables for skipping GitHub update & disabling AI Copilot
+# Parse command line flags or environment variables for skipping GitHub update, disabling AI Copilot & branch selection
 SKIP_UPDATE="${SKIP_UPDATE:-false}"
 if [ "${OFFLINE:-false}" = "true" ] || [ "${NO_UPDATE:-false}" = "true" ]; then
   SKIP_UPDATE=true
@@ -18,13 +18,35 @@ if [ "${DISABLE_AI_COPILOT:-false}" = "true" ] || [ "${NO_AI:-false}" = "true" ]
   DISABLE_AI=true
 fi
 
-for arg in "$@"; do
-  case $arg in
+TARGET_BRANCH="${GIT_BRANCH:-}"
+if [ "${USE_TEST_BRANCH:-false}" = "true" ] || [ "${CHECKOUT_TEST:-false}" = "true" ] || [ "${TEST_BRANCH:-false}" = "true" ]; then
+  TARGET_BRANCH="test"
+fi
+
+while [ $# -gt 0 ]; do
+  case "$1" in
     --skip-update|--no-update|-s|--offline)
       SKIP_UPDATE=true
+      shift
       ;;
     --disable-ai|--no-ai|--no-copilot|--disable-copilot)
       DISABLE_AI=true
+      shift
+      ;;
+    --test|--test-branch|--use-test|--beta|--dev-branch)
+      TARGET_BRANCH="test"
+      shift
+      ;;
+    --branch)
+      TARGET_BRANCH="$2"
+      shift 2
+      ;;
+    --branch=*)
+      TARGET_BRANCH="${1#*=}"
+      shift
+      ;;
+    *)
+      shift
       ;;
   esac
 done
@@ -47,11 +69,30 @@ elif [ -d ".git" ] && command -v git >/dev/null 2>&1; then
   echo "🔍 Checking for updates from GitHub..."
   if git fetch origin >/dev/null 2>&1; then
     CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "main")
+    DESIRED_BRANCH="${TARGET_BRANCH:-$CURRENT_BRANCH}"
+
+    if [ "$CURRENT_BRANCH" != "$DESIRED_BRANCH" ]; then
+      echo "🔀 Switching branch from '${CURRENT_BRANCH}' to '${DESIRED_BRANCH}'..."
+      HAS_CHANGES=$(git status --porcelain 2>/dev/null || true)
+      if [ -n "$HAS_CHANGES" ]; then
+        echo "⚠️ Local uncommitted changes detected. Stashing local changes before branch switch..."
+        git stash save "Auto-stashed before switching to ${DESIRED_BRANCH}" >/dev/null 2>&1 || true
+      fi
+
+      if git checkout "$DESIRED_BRANCH" 2>/dev/null || git checkout -b "$DESIRED_BRANCH" "origin/$DESIRED_BRANCH" 2>/dev/null; then
+        echo "✅ Switched to branch '${DESIRED_BRANCH}'."
+        CURRENT_BRANCH="$DESIRED_BRANCH"
+        REINSTALL_REQUIRED=true
+      else
+        echo "⚠️ Could not switch to branch '${DESIRED_BRANCH}'. Staying on '${CURRENT_BRANCH}'."
+      fi
+    fi
+
     LOCAL_HASH=$(git rev-parse HEAD 2>/dev/null || true)
     REMOTE_HASH=$(git rev-parse "origin/${CURRENT_BRANCH}" 2>/dev/null || true)
 
     if [ -n "$LOCAL_HASH" ] && [ -n "$REMOTE_HASH" ] && [ "$LOCAL_HASH" != "$REMOTE_HASH" ]; then
-      echo "🔄 New update found on GitHub! Pulling latest changes..."
+      echo "🔄 New update found on GitHub for branch '${CURRENT_BRANCH}'! Pulling latest changes..."
       HAS_CHANGES=$(git status --porcelain 2>/dev/null || true)
       if [ -n "$HAS_CHANGES" ]; then
         echo "⚠️ Local uncommitted changes detected. Stashing local changes before update..."
@@ -59,7 +100,7 @@ elif [ -d ".git" ] && command -v git >/dev/null 2>&1; then
       fi
 
       if git pull origin "$CURRENT_BRANCH"; then
-        echo "✅ Updated to latest version from GitHub!"
+        echo "✅ Updated to latest version from GitHub (${CURRENT_BRANCH})!"
         chmod +x "$0" 2>/dev/null || chmod +x start.sh 2>/dev/null || true
         git update-index --chmod=+x start.sh 2>/dev/null || true
         REINSTALL_REQUIRED=true
@@ -67,7 +108,7 @@ elif [ -d ".git" ] && command -v git >/dev/null 2>&1; then
         echo "⚠️ Git pull failed. Continuing with local version."
       fi
     else
-      echo "✅ Repository is up to date."
+      echo "✅ Repository branch '${CURRENT_BRANCH}' is up to date."
     fi
   else
     echo "ℹ️ Unable to reach GitHub remote or fetch updates. Skipping update check."
