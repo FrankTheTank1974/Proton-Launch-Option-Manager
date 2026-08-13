@@ -188,10 +188,13 @@ export const LiveCommandPreview: React.FC<LiveCommandPreviewProps> = ({
                 ? 'bg-emerald-600 text-white'
                 : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
             }`}
-            title="Save launch options in manager state"
+            title="Save launch options in manager state (Ctrl+S)"
           >
             {applied ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5 text-cyan-400" />}
             <span>{applied ? 'Saved!' : 'Save Game'}</span>
+            <kbd className="font-mono text-[9px] bg-slate-900 text-slate-400 px-1 py-0.5 rounded border border-slate-700/80 hidden sm:inline-block">
+              Ctrl+S
+            </kbd>
           </button>
 
           <button

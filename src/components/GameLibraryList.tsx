@@ -10,6 +10,7 @@ interface GameLibraryListProps {
   onOpenAddGame: () => void;
   onOpenScanLocalLibrary?: () => void;
   onOpenSteamGridDb?: (game: SteamGame) => void;
+  searchInputRef?: React.RefObject<HTMLInputElement | null>;
 }
 
 export const GameLibraryList: React.FC<GameLibraryListProps> = ({
@@ -20,6 +21,7 @@ export const GameLibraryList: React.FC<GameLibraryListProps> = ({
   onOpenAddGame,
   onOpenScanLocalLibrary,
   onOpenSteamGridDb,
+  searchInputRef,
 }) => {
   const [search, setSearch] = useState('');
   const [filterFavorite, setFilterFavorite] = useState(false);
@@ -97,12 +99,16 @@ export const GameLibraryList: React.FC<GameLibraryListProps> = ({
           <div className="relative flex-1">
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
             <input
+              ref={searchInputRef}
               type="text"
-              placeholder="Search game or AppID..."
+              placeholder="Search game or AppID... (Ctrl+F)"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none transition"
+              className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg pl-8 pr-12 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none transition"
             />
+            <kbd className="absolute right-2 top-2 pointer-events-none hidden sm:inline-block font-mono text-[9px] bg-slate-900 text-slate-500 px-1.5 py-0.5 rounded border border-slate-800">
+              Ctrl+F
+            </kbd>
           </div>
 
           <button
