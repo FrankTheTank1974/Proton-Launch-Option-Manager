@@ -208,6 +208,9 @@ export default function App() {
     return generateCommandString(enabledFlags, customEnvVars, extraArgs, wrapperOrder);
   }, [enabledFlags, customEnvVars, extraArgs, wrapperOrder]);
 
+  // Search input ref for Ctrl+F shortcut
+  const searchInputRef = React.useRef<HTMLInputElement | null>(null);
+
   // Apply command to current selected game
   const handleApplyCommandToGame = (newCommand: string) => {
     setGames((prev) =>
@@ -223,6 +226,49 @@ export default function App() {
     );
     showToast(`Updated launch options for ${selectedGame.name}`);
   };
+
+  // Global Keyboard Shortcuts (Ctrl+S, Ctrl+F, Esc)
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isCmdOrCtrl = e.ctrlKey || e.metaKey;
+
+      // Ctrl+S / Cmd+S: Save/apply current options
+      if (isCmdOrCtrl && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        handleApplyCommandToGame(currentCommandString);
+        return;
+      }
+
+      // Ctrl+F / Cmd+F: Focus search bar
+      if (isCmdOrCtrl && (e.key === 'f' || e.key === 'F')) {
+        e.preventDefault();
+        if (searchInputRef.current) {
+          searchInputRef.current.focus();
+          searchInputRef.current.select();
+        }
+        return;
+      }
+
+      // Esc: Close any open modal
+      if (e.key === 'Escape') {
+        setIsCCodeOpen(false);
+        setIsVdfSyncOpen(false);
+        setIsPresetsOpen(false);
+        setIsAIAssistantOpen(false);
+        setIsProtonDbModalOpen(false);
+        setIsAddGameOpen(false);
+        setIsScanLocalLibraryOpen(false);
+        setIsProtonManagerOpen(false);
+        setIsBackupOpen(false);
+        setIsSteamGridDbOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [currentCommandString, selectedGame.id, selectedGame.name]);
 
   // Handle Preset selection
   const handleSelectPreset = (preset: PresetProfile) => {
@@ -333,6 +379,7 @@ export default function App() {
               setSelectedGameId(g.id);
               setIsSteamGridDbOpen(true);
             }}
+            searchInputRef={searchInputRef}
           />
         </div>
 
