@@ -43,7 +43,7 @@ export function parseCommandString(commandStr: string): CommandState {
     if (matchedFlag) {
       if (matchedFlag.type === 'toggle') {
         enabledFlags[matchedFlag.id] = val === '1' || val === 'true';
-      } else if (matchedFlag.type === 'select') {
+      } else if (matchedFlag.type === 'select' || matchedFlag.type === 'text' || matchedFlag.type === 'number') {
         enabledFlags[matchedFlag.id] = val;
       }
     } else {
@@ -99,11 +99,15 @@ export function generateCommandString(
       if (val === true) {
         envVars.push(`${flag.key}=1`);
       }
-    } else if (flag.type === 'select') {
+    } else if (flag.type === 'select' || flag.type === 'text' || flag.type === 'number') {
       if (typeof val === 'string' && val.length > 0) {
         const cleanVal = val.replace(/^["']|["']$/g, '');
-        const formattedVal = cleanVal.includes(' ') || cleanVal.includes('=') ? `"${cleanVal}"` : cleanVal;
+        const formattedVal = (cleanVal.includes(' ') || cleanVal.includes('=') || cleanVal.includes(';') || cleanVal.includes(',')) ? `"${cleanVal}"` : cleanVal;
         envVars.push(`${flag.key}=${formattedVal}`);
+      } else if (typeof val === 'number') {
+        envVars.push(`${flag.key}=${val}`);
+      } else if (val === true) {
+        envVars.push(`${flag.key}=1`);
       }
     }
   });

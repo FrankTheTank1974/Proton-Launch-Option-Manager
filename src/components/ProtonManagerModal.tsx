@@ -284,6 +284,8 @@ export const ProtonManagerModal: React.FC<ProtonManagerModalProps> = ({
         return <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">🔥 GE-Proton</span>;
       case 'cachyos':
         return <span className="bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">⚡ Proton-CachyOS</span>;
+      case 'rtsp':
+        return <span className="bg-rose-500/10 text-rose-400 border border-rose-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">📹 Proton-RTSP</span>;
       case 'luxtorpeda':
         return <span className="bg-rose-500/10 text-rose-400 border border-rose-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">🚀 Luxtorpeda</span>;
       case 'boxtron':
@@ -398,7 +400,7 @@ export const ProtonManagerModal: React.FC<ProtonManagerModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Download, update & manage GE-Proton, CachyOS, EM-Proton & DW-Proton in Steam's <code className="text-amber-300 font-mono">compatibilitytools.d</code>
+                Download, update & manage GE-Proton, CachyOS, Proton-RTSP, EM-Proton & DW-Proton in Steam's <code className="text-amber-300 font-mono">compatibilitytools.d</code>
               </p>
             </div>
           </div>
@@ -514,6 +516,7 @@ export const ProtonManagerModal: React.FC<ProtonManagerModalProps> = ({
                   { id: 'all', label: 'All Providers' },
                   { id: 'ge', label: '🔥 GE-Proton' },
                   { id: 'cachyos', label: '⚡ Proton-CachyOS' },
+                  { id: 'rtsp', label: '📹 Proton-RTSP' },
                   { id: 'luxtorpeda', label: '🚀 Luxtorpeda' },
                   { id: 'boxtron', label: '📦 Boxtron' },
                   { id: 'roberta', label: '📜 Roberta' },

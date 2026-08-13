@@ -862,6 +862,13 @@ Return ONLY valid JSON.`,
       desc: 'CachyOS optimized Proton with x86-64-v3/v4 compiler tweaks, LTO, and kernel sync patches.',
       icon: '⚡',
     },
+    rtsp: {
+      name: 'Proton-RTSP (Livestream GStreamer Runner)',
+      repo: 'SpookySkeletons/proton-rtsp',
+      providerType: 'github',
+      desc: 'SpookySkeletons build with GStreamer RTSP/RTP/HLS video streaming pipeline for VRChat & AVPro media players.',
+      icon: '📹',
+    },
     luxtorpeda: {
       name: 'Luxtorpeda',
       repo: 'luxtorpeda/luxtorpeda',
@@ -947,16 +954,42 @@ Return ONLY valid JSON.`,
     };
   }
 
+  // Extract filename stem without archive extension
+  function getAssetStem(filename: string): string {
+    let name = filename.toLowerCase();
+    const extensions = [
+      '.tar.zst', '.tar.xz', '.tar.gz', '.tar.bz2',
+      '.tzst', '.txz', '.tgz', '.tbz2',
+      '.zst', '.xz', '.gz', '.bz2',
+      '.tar', '.7z', '.zip'
+    ];
+    for (const ext of extensions) {
+      if (name.endsWith(ext)) {
+        return name.slice(0, -ext.length);
+      }
+    }
+    return name;
+  }
+
   // Score a release asset against the host architecture
   function scoreAssetForHost(assetName: string, hostInfo: ReturnType<typeof getHostArchitectureInfo>) {
     const name = assetName.toLowerCase();
 
     const isChecksum = name.endsWith('.sha512') ||
+      name.endsWith('.sha512sum') ||
       name.endsWith('.sha256') ||
+      name.endsWith('.sha256sum') ||
       name.endsWith('.sha1') ||
+      name.endsWith('.sha1sum') ||
       name.endsWith('.md5') ||
+      name.endsWith('.md5sum') ||
       name.endsWith('.sig') ||
-      name.endsWith('.asc');
+      name.endsWith('.asc') ||
+      name.endsWith('.sum') ||
+      name.includes('sha512') ||
+      name.includes('sha256') ||
+      name.includes('md5sum') ||
+      name.includes('checksum');
 
     if (isChecksum) {
       return { score: -10000, archTag: 'checksum', isCompatible: false, isRecommended: false };
@@ -997,6 +1030,17 @@ Return ONLY valid JSON.`,
     let score = 100;
     let isCompatible = true;
     let isRecommended = false;
+
+    // Compression format preferences (zst > xz > gz > bz2)
+    if (name.endsWith('.tar.zst') || name.endsWith('.zst') || name.endsWith('.tzst')) {
+      score += 80;
+    } else if (name.endsWith('.tar.xz') || name.endsWith('.xz') || name.endsWith('.txz')) {
+      score += 60;
+    } else if (name.endsWith('.tar.gz') || name.endsWith('.gz') || name.endsWith('.tgz')) {
+      score += 40;
+    } else if (name.endsWith('.tar.bz2') || name.endsWith('.bz2') || name.endsWith('.tbz2')) {
+      score += 20;
+    }
 
     if (hostInfo.isX64) {
       if (isArm || isRiscv || isLoong) {
@@ -1096,9 +1140,21 @@ Return ONLY valid JSON.`,
           })
           .filter((a: any) => a.score > -9000);
 
+        // Sort by score descending (so tar.zst and recommended archs come first)
         processedAssets.sort((a: any, b: any) => b.score - a.score);
 
-        const primaryAsset = processedAssets[0] || null;
+        // Deduplicate assets for the same build/stem, keeping the highest scoring format (e.g. tar.zst over tar.gz)
+        const seenStems = new Set<string>();
+        const deduplicatedAssets: typeof processedAssets = [];
+        for (const asset of processedAssets) {
+          const stemKey = `${getAssetStem(asset.name)}_${asset.archTag}`;
+          if (!seenStems.has(stemKey)) {
+            seenStems.add(stemKey);
+            deduplicatedAssets.push(asset);
+          }
+        }
+
+        const primaryAsset = deduplicatedAssets[0] || null;
 
         return {
           id: rel.id,
@@ -1111,7 +1167,7 @@ Return ONLY valid JSON.`,
           htmlUrl: rel.html_url || (isCodeberg ? `https://codeberg.org/${repoOwnerAndName}/releases/tag/${rel.tag_name}` : `https://github.com/${repoOwnerAndName}/releases/tag/${rel.tag_name}`),
           repo: repoOwnerAndName,
           asset: primaryAsset,
-          allAssets: processedAssets,
+          allAssets: deduplicatedAssets,
         };
       }).filter((rel: any) => rel.asset && rel.asset.downloadUrl && rel.allAssets && rel.allAssets.length > 0);
     } catch (err) {

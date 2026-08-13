@@ -46,6 +46,25 @@ export const CCodeGeneratorModal: React.FC<CCodeGeneratorModalProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleDownloadBashScript = () => {
+    const shFile = cFiles.find((f) => f.filename === 'launch_game.sh');
+    const content = shFile
+      ? shFile.content
+      : `#!/usr/bin/env bash\n# Launch ${selectedGame.name}\nsteam "steam://rungameid/${selectedGame.appId}" &\n`;
+    const safeName = selectedGame.name.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
+    const filename = `launch_${safeName || 'game'}_${selectedGame.appId}.sh`;
+
+    const blob = new Blob([content], { type: 'text/x-sh;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const handleDownloadZip = async () => {
     setDownloading(true);
     try {
@@ -97,6 +116,15 @@ export const CCodeGeneratorModal: React.FC<CCodeGeneratorModalProps> = ({
 
           <div className="flex items-center space-x-2">
             <button
+              onClick={handleDownloadBashScript}
+              className="bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition shadow-md"
+              title="Download standalone Linux bash script (.sh)"
+            >
+              <Terminal className="w-4 h-4 text-cyan-200" />
+              <span>Export Bash Script (.sh)</span>
+            </button>
+
+            <button
               onClick={handleDownloadZip}
               disabled={downloading}
               className="bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition shadow-md disabled:opacity-50"
@@ -125,6 +153,7 @@ export const CCodeGeneratorModal: React.FC<CCodeGeneratorModalProps> = ({
 
             {cFiles.map((file, idx) => {
               const isActive = idx === activeFileIndex;
+              const isSh = file.filename.endsWith('.sh');
               return (
                 <button
                   key={file.filename}
@@ -135,7 +164,11 @@ export const CCodeGeneratorModal: React.FC<CCodeGeneratorModalProps> = ({
                       : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200 border border-transparent'
                   }`}
                 >
-                  <FileCode className={`w-4 h-4 ${isActive ? 'text-cyan-400' : 'text-slate-500'}`} />
+                  {isSh ? (
+                    <Terminal className={`w-4 h-4 ${isActive ? 'text-cyan-400' : 'text-amber-400'}`} />
+                  ) : (
+                    <FileCode className={`w-4 h-4 ${isActive ? 'text-cyan-400' : 'text-slate-500'}`} />
+                  )}
                   <span className="truncate">{file.filename}</span>
                 </button>
               );

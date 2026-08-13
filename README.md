@@ -28,6 +28,7 @@ A modern Linux gaming utility designed for Linux gamers, Steam Deck users, and p
 * Discover, download, and manage custom Proton runner releases directly in Steam's `compatibilitytools.d`:
   * **GE-Proton** (GloriousEggroll)
   * **Proton-CachyOS** (Compiler-optimized x86-64-v3/v4 builds)
+  * **Proton-RTSP** (SpookySkeletons GStreamer runner for VRChat & RTSP/HLS livestreams)
   * **Luxtorpeda** (Native Linux game engine compatibility tool from Codeberg)
   * **Boxtron** (Steam compatibility tool for DOS games using DOSBox/DOSBox-Staging)
   * **Roberta** (Steam compatibility tool for adventure games using ScummVM)
@@ -38,14 +39,171 @@ A modern Linux gaming utility designed for Linux gamers, Steam Deck users, and p
 * Generate standalone C99 source code wrappers and GTK3 desktop utilities for custom launchers—no web browser required at runtime.
 
 ### ⚡ Low Latency Layer (LLL) Integration
-* Full support for Korthos Software's **[Low Latency Layer](https://github.com/Korthos-Software/low_latency_layer)** (`low_latency_layer`):
-  * `LOW_LATENCY_LAYER=1` (Main activation flag)
-  * `LOW_LATENCY_LAYER_REFLEX=1` (Expose `VK_NV_low_latency2` / Nvidia Reflex extension interface)
-  * `LOW_LATENCY_LAYER_DECOUPLED_MITIGATION=1` (Force mitigation for decoupled simulation and render queues)
-  * `LOW_LATENCY_LAYER_DISABLE=1` (Explicit layer override)
-  * `LOW_LATENCY_LAYER_NV_GPU_REPORT_AS_NVIDIA=1` (Debug vendor spoofing)
-  * `DXVK_CONFIG="dxgi.hideAmdGpu = True"` (DXVK AMD GPU hiding for in-game Reflex menus)
-  * `ENABLE_LAYER_MESA_ANTI_LAG=1` (Mesa RADV native Anti-Lag 2)
+Full support for Korthos Software's **[Low Latency Layer](https://github.com/Korthos-Software/low_latency_layer)** (`low_latency_layer`).
+
+<details>
+<summary><b>View Low Latency Layer Options</b></summary>
+
+* `LOW_LATENCY_LAYER=1` (Main activation flag)
+* `LOW_LATENCY_LAYER_REFLEX=1` (Expose `VK_NV_low_latency2` / Nvidia Reflex extension interface)
+* `LOW_LATENCY_LAYER_DECOUPLED_MITIGATION=1` (Force mitigation for decoupled simulation and render queues)
+* `LOW_LATENCY_LAYER_DISABLE=1` (Explicit layer override)
+* `LOW_LATENCY_LAYER_NV_GPU_REPORT_AS_NVIDIA=1` (Debug vendor spoofing)
+* `DXVK_CONFIG="dxgi.hideAmdGpu = True"` (DXVK AMD GPU hiding for in-game Reflex menus)
+* `ENABLE_LAYER_MESA_ANTI_LAG=1` (Mesa RADV native Anti-Lag 2)
+
+</details>
+
+### 🚀 Proton-CachyOS Config Options
+Native support for **[Proton-CachyOS](https://github.com/CachyOS/proton-cachyos)** environment variables and runtime settings.
+
+<details>
+<summary><b>View Proton-CachyOS Config Options</b></summary>
+
+* `PROTON_DXVK_LOWLATENCY=1` (Frame pacing & low-latency DXVK fork)
+* `PROTON_FSR4_UPGRADE=1` (Auto-upgrade FSR 3.1 games to AMD FSR 4)
+* `PROTON_FSR4_RDNA3_UPGRADE=1` (RDNA 3 specific FSR 4 DLL upgrade path)
+* `PROTON_USE_OPTISCALER=1` (OptiScaler in-game DLSS/FSR/XeSS upscaler injection)
+* `PROTON_OPTISCALER_CONFIG="..."` (Custom OptiScaler INI config parameters)
+* `PROTON_DLSS_UPGRADE="310.2"` (Force DLSS DLL version overrides & NVAPI DRS)
+* `PROTON_DLSS_OVERLAY=1` (On-screen DLSS HUD indicator)
+* `PROTON_VKREFLEX=1` (DXVK-NVAPI Vulkan Reflex layer)
+* `PROTON_DXVK_SAREK=1` (Async DXVK fallback for legacy non-Vulkan 1.3 GPUs)
+* `PROTON_NVIDIA_LIBS=1` (CUDA, NVENC, NVML, PhysX, and OptiX Wine acceleration)
+* `PROTON_NVIDIA_NVOPTIX=1` (OptiX ray tracing DLL)
+* `WINE_FULLSCREEN_INTEGER_SCALING=1` (Sharp pixel integer scaling)
+* `WINE_DISABLE_VULKAN_OPWR=1` (Wayland windowing glitch workaround)
+* `PROTON_NO_WM_DECORATION=1` (Disable WM decorations)
+* `PROTON_LOCAL_SHADER_CACHE=1` (Per-game local shader cache)
+* `WINE_BLOCK_HOSTS="..."` (Block Wine telemetry & DRM domains)
+
+</details>
+
+### 📦 GE-Proton Options
+Full support for **[GE-Proton (GloriousEggroll)](https://github.com/GloriousEggroll/proton-ge-custom)** environment variables and Wine-GE patches.
+
+<details>
+<summary><b>View GE-Proton Config Options</b></summary>
+
+* `PROTON_ENABLE_NVAPI=1` (Expose NVAPI & enable Nvidia DLSS/Reflex)
+* `WINE_FULLSCREEN_FSR=1` (Built-in AMD FSR 1.0 spatial upscaler)
+* `WINE_FULLSCREEN_FSR_CUSTOM_MODE="1440x900"` (Custom render resolution override)
+* `WINE_FULLSCREEN_FSR_STRENGTH=2` (Adjust FSR sharpening strength 0-5)
+* `PROTON_FORCE_LARGE_ADDRESS_AWARE=1` (Access up to 4GB RAM for 32-bit titles)
+* `PROTON_DISABLE_NVAPI=1` (Disable NVAPI to fix driver startup crashes)
+* `PROTON_NO_AMD_AGS=1` (Disable AMD AGS driver extensions)
+* `PROTON_SET_GAME_DRIVE=1` (Virtual drive mount point for EA/Ubisoft launchers)
+* `PROTON_ENABLE_HDR=1` (Enable High Dynamic Range 10-bit surface output)
+
+</details>
+
+### 🛠️ Proton-EM Options
+Config options for **[Proton-EM](https://github.com/Etaash-mathamsetty)** with enhanced Wayland (`winewayland.drv`) and CJK IME input support.
+
+<details>
+<summary><b>View Proton-EM Config Options</b></summary>
+
+* `PROTON_EM_ENABLE_WAYLAND=1` (Enable native Wayland winewayland.drv display driver)
+* `PROTON_WAYLAND_KWIN_REPEAT_BUG=1` (Fix KDE KWin key repeat bugs with IME active)
+* `PROTON_RAW_INPUT_SENSITIVITY=1` (Fix mouse raw input camera scaling under Wayland)
+* `PROTON_EM_FSR4=1` (Integrated Proton-EM FSR 4 upscaler pipeline)
+* `WINE_WAYLAND_TRICKS=1` (Experimental Wayland windowing and borderless tricks)
+
+</details>
+
+### 🛡️ Proton-DW Options
+Config options for **Proton-DW** (DeepWine) compatibility runner for online games & Asian titles.
+
+<details>
+<summary><b>View Proton-DW Config Options</b></summary>
+
+* `PROTON_DW_DXVK=1` (Force Proton-DW updated DXVK translation layer branch)
+* `PROTON_DW_EAC_WORKAROUND=1` (Easy Anti-Cheat launcher compatibility patch)
+* `PROTON_DW_DIRECTWRITE_OVERRIDE=1` (Override DirectWrite font engine for CJK launcher text)
+* `PROTON_DW_DISABLE_CEF_SANDBOX=1` (Disable CEF browser sandbox in HoYoverse/Nikke launchers)
+
+</details>
+
+### 📺 Boxtron (DOSBox) Options
+Config options for **[Boxtron](https://github.com/dreamchess/boxtron)** Steam Play compatibility tool for DOS games using native DOSBox / DOSBox-Staging.
+
+<details>
+<summary><b>View Boxtron Config Options</b></summary>
+
+* `BOXTRON_SIERRA_GAME="1"` (Select specific game index in Sierra Classics collection)
+* `BOXTRON_SCREEN=2` (Direct DOSBox fullscreen output to specific monitor index)
+* `BOXTRON_USE_MIDI_SEQ="128:0"` (Override preferred MIDI client/sequencer port)
+* `BOXTRON_DOSBOX="dosbox-staging"` (Use custom DOSBox executable build)
+* `BOXTRON_CONF="~/.config/boxtron.conf"` (Custom boxtron config file path)
+
+</details>
+
+### 🕹️ Luxtorpeda (Native Engine Runner) Options
+Config options for **[Luxtorpeda](https://github.com/luxtorpeda-dev/luxtorpeda)** Steam Play tool to run native Linux game engines and open-source source ports.
+
+<details>
+<summary><b>View Luxtorpeda Config Options</b></summary>
+
+* `LUX_FORCE_UPDATE=1` (Force re-download and update native game engine packages)
+* `LUX_STEAM_DECK=1` (Force handheld UI and controller optimizations)
+* `LUX_SHOW_CHOICE=1` (Force engine selection prompt on game boot)
+* `LUX_ENGINE_CHOICE="openmw"` (Pre-select engine package ID to bypass choice dialog)
+* `LUX_VERBOSE=1` (Enable verbose debug logging output)
+
+</details>
+
+### 🤠 Roberta (ScummVM Runner) Options
+Config options for **[Roberta](https://github.com/dreamchess/roberta)** Steam Play tool for classic adventure games using native Linux ScummVM.
+
+<details>
+<summary><b>View Roberta Config Options</b></summary>
+
+* `ROBERTA_SIERRA_GAME="1"` (Select target game index in Sierra adventure collections)
+* `LUX_SCUMMVM_GAME="monkey2"` (Pass target game engine ID directly to ScummVM)
+* `ROBERTA_SCREEN=2` (Direct ScummVM display to specific monitor index)
+* `ROBERTA_SCUMMVM="scummvm"` (Custom path or binary name for ScummVM executable)
+
+</details>
+
+### 📹 Proton-RTSP (Livestreaming GStreamer Runner) Options
+Config options for **[Proton-RTSP](https://github.com/SpookySkeletons/proton-rtsp)** by SpookySkeletons — a Steam Play compatibility tool specialized for RTSP, RTP, and HLS livestream video playback (AVPro Video in VRChat, ChilloutVR, etc.).
+
+<details>
+<summary><b>View Proton-RTSP Config Options</b></summary>
+
+* `PROTON_ENABLE_RTSP=1` (Enables GStreamer RTSP transport stack for VRChat & AVPro livestreams)
+* `PROTON_GST_VIDEO_ORIENTATION="180"` (Fixes upside-down or inverted stream textures in world media players)
+* `PROTON_ENABLE_NVDEC=1` (Enables Nvidia GPU NVDEC video decoding acceleration inside GStreamer)
+* `PROTON_ENABLE_VAAPI=1` (Enables AMD / Intel VA-API hardware video acceleration)
+* `PROTON_YTDLP_LOCATION="/usr/bin/yt-dlp"` (Custom binary path for yt-dlp to resolve Twitch/YouTube/RTSP streams)
+* `PROTON_MEDIA_FORCE_MF=1` (Forces Windows Media Foundation requests through Proton-RTSP GStreamer pipeline)
+* `PROTON_RTSP_PORT_RANGE="8554-8560"` (Custom network port range bounds for RTSP stream sockets)
+* `GST_DEBUG="rtsp*:4,rtp*:4"` (GStreamer debug log level for diagnosing stream player failures)
+
+</details>
+
+### 🧪 Official Valve Proton & Proton Experimental Options
+Essential runtime & debugging environment variables supported natively by **Valve Proton (Proton 9.0+, Proton Experimental, and Bleeding-Edge)**.
+
+<details>
+<summary><b>View Valve Proton & Proton Experimental Flags</b></summary>
+
+* `PROTON_ENABLE_WAYLAND=1` (Enables official Valve winewayland.drv display driver in Proton 9.0+)
+* `PROTON_USE_SECCOMP=1` (Enables Linux Seccomp syscall filtering for EAC / BattlEye & anti-cheat)
+* `PROTON_USE_EAC_LINUX=1` (Forces Steam Linux Easy Anti-Cheat runtime module bridge)
+* `PROTON_USE_BE_LINUX=1` (Forces Steam Linux BattlEye runtime module bridge)
+* `PROTON_ENABLE_AMD_AGS=1` (Enables AMD AGS library support for Radeon GPUs)
+* `PROTON_DISABLE_NVNGX=1` (Disables Nvidia NGX DLSS wrapper if causing crashes)
+* `PROTON_DUMP_DEBUG_COMMANDS=1` (Dumps standalone gdb / lldb debug launch scripts into `/tmp/proton_*`)
+* `PROTON_DEBUG_DIR="/tmp/proton_debug"` (Custom target directory for Proton debug logs and trace dumps)
+* `PROTON_CRASH_REPORT_DIR="~/proton_crashes"` (Target directory for game crash dumps and minidumps)
+* `PROTON_OFFLOAD_VK_DEVICE="0"` (Offloads Vulkan device rendering on hybrid graphics laptops)
+* `PROTON_NO_WRITE_WATCH=1` (Disables Wine memory write-watch mechanism for stability)
+* `PROTON_DISABLE_D3D11=1` / `PROTON_DISABLE_D3D10=1` (Disables DXVK D3D11/D3D10 translation layers)
+* `STEAM_COMPAT_DATA_PATH="~/.local/share/steam_prefixes/game"` (Custom Proton prefix location path)
+* `PROTON_VERBOSITY=2` (Increases logging verbosity level in `steam-<appid>.log`)
+
+</details>
 
 ### ⚡ One-Click Preset Profiles
 * Instant configurations for *Low Latency Layer (Reflex / Anti-Lag 2)*, *Steam Deck*, *NVIDIA RTX Ray Tracing*, *AMD Radeon High Performance*, *Low Latency Competitive*, and *Ultra-Wide Displays*.

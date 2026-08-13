@@ -45,12 +45,15 @@ export const PRESET_PROFILES: PresetProfile[] = [
   },
   {
     id: 'cachyos_performance',
-    title: 'CachyOS Max Performance',
-    description: 'Uses the native CachyOS game-performance wrapper, NTSync kernel driver, and MangoHud performance overlay.',
-    targetHardware: 'CachyOS Linux / cachyos-settings',
+    title: 'Proton-CachyOS Ultra (Low Latency + OptiScaler + FSR 4)',
+    description: 'Enables CachyOS game-performance wrapper, dxvk-low-latency, OptiScaler upscaler injection, FSR 4 auto-upgrade, and NTSync kernel synchronization.',
+    targetHardware: 'Proton-CachyOS Runner / CachyOS Linux',
     iconName: 'Zap',
     enabledFlags: {
       game_performance: true,
+      cachyos_dxvk_lowlatency: true,
+      cachyos_use_optiscaler: true,
+      cachyos_fsr4_upgrade: '1',
       proton_use_ntsync: true,
       mangohud: true,
     },
