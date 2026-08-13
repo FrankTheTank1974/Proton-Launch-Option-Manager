@@ -28,6 +28,9 @@ A modern Linux gaming utility designed for Linux gamers, Steam Deck users, and p
 * Discover, download, and manage custom Proton runner releases directly in Steam's `compatibilitytools.d`:
   * **GE-Proton** (GloriousEggroll)
   * **Proton-CachyOS** (Compiler-optimized x86-64-v3/v4 builds)
+  * **Luxtorpeda** (Native Linux game engine compatibility tool from Codeberg)
+  * **Boxtron** (Steam compatibility tool for DOS games using DOSBox/DOSBox-Staging)
+  * **Roberta** (Steam compatibility tool for adventure games using ScummVM)
   * **Proton-EM** (Etaash Mathamsetty performance builds)
   * **Proton-DW** (Wine-GE / DirectWay)
 

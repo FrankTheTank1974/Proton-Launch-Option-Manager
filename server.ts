@@ -813,29 +813,87 @@ Return ONLY valid JSON.`,
   // (Proton GE, Proton CachyOS, Proton EM, Proton DW)
   // ==========================================
 
-  // Known Proton runner repositories on GitHub
-  const RUNNER_REPOS: Record<string, { name: string; repo: string; desc: string; icon: string }> = {
+  // Helper to format byte counts human-readably (KB, MB, GB)
+  function formatBytesReadable(bytes: number): string {
+    if (!bytes || bytes <= 0) return 'Unknown size';
+    if (bytes < 1024 * 1024) {
+      return `${(bytes / 1024).toFixed(1)} KB`;
+    }
+    const mb = bytes / (1024 * 1024);
+    if (mb >= 1000) {
+      return `${(mb / 1024).toFixed(2)} GB`;
+    }
+    return `${mb.toFixed(1)} MB`;
+  }
+
+  // Recursive directory size calculation helper
+  function getDirectorySizeBytes(dirPath: string, maxDepth = 3, currentDepth = 0): number {
+    if (currentDepth > maxDepth) return 0;
+    let total = 0;
+    try {
+      const items = fs.readdirSync(dirPath, { withFileTypes: true });
+      for (const item of items) {
+        const full = path.join(dirPath, item.name);
+        if (item.isDirectory()) {
+          total += getDirectorySizeBytes(full, maxDepth, currentDepth + 1);
+        } else if (item.isFile()) {
+          try {
+            total += fs.statSync(full).size;
+          } catch {}
+        }
+      }
+    } catch {}
+    return total;
+  }
+
+  // Known Proton runner repositories on GitHub / Codeberg
+  const RUNNER_REPOS: Record<string, { name: string; repo: string; providerType?: 'github' | 'codeberg'; desc: string; icon: string }> = {
     ge: {
       name: 'GE-Proton (Proton GE)',
       repo: 'GloriousEggroll/proton-ge-custom',
+      providerType: 'github',
       desc: 'GloriousEggroll build with media codecs (MF/WMA), bleeding-edge Wine patches, and game fixes.',
       icon: '🔥',
     },
     cachyos: {
       name: 'Proton-CachyOS',
       repo: 'CachyOS/proton-cachyos',
+      providerType: 'github',
       desc: 'CachyOS optimized Proton with x86-64-v3/v4 compiler tweaks, LTO, and kernel sync patches.',
       icon: '⚡',
+    },
+    luxtorpeda: {
+      name: 'Luxtorpeda',
+      repo: 'luxtorpeda/luxtorpeda',
+      providerType: 'codeberg',
+      desc: 'Steam compatibility tool that enables running native Linux game engines for Windows/DOS games on Steam.',
+      icon: '🚀',
+    },
+    boxtron: {
+      name: 'Boxtron',
+      repo: 'dreamer/boxtron',
+      providerType: 'github',
+      desc: 'Steam compatibility tool to run DOS games natively using Linux DOSBox or DOSBox-Staging.',
+      icon: '📦',
+    },
+    roberta: {
+      name: 'Roberta',
+      repo: 'dreamer/roberta',
+      providerType: 'github',
+      desc: 'Steam compatibility tool to run adventure games natively using Linux ScummVM.',
+      icon: '📜',
     },
     em: {
       name: 'Proton-EM (Etaash Mathamsetty Proton)',
       repo: 'Etaash-mathamsetty/Proton',
+      providerType: 'github',
       desc: 'Proton-EM build by Etaash Mathamsetty with performance optimizations, custom Wine patches, and game fixes.',
       icon: '🐺',
     },
     dw: {
       name: 'Proton-DW / Wine-GE',
       repo: 'GloriousEggroll/wine-ge-custom',
+      providerType: 'github',
       desc: 'DirectWay / Wine-GE Proton variant optimized for standalone Wine, Direct3D, and Wayland games.',
       icon: '🛠️',
     },
@@ -893,12 +951,27 @@ Return ONLY valid JSON.`,
   function scoreAssetForHost(assetName: string, hostInfo: ReturnType<typeof getHostArchitectureInfo>) {
     const name = assetName.toLowerCase();
 
+    const isChecksum = name.endsWith('.sha512') ||
+      name.endsWith('.sha256') ||
+      name.endsWith('.sha1') ||
+      name.endsWith('.md5') ||
+      name.endsWith('.sig') ||
+      name.endsWith('.asc');
+
+    if (isChecksum) {
+      return { score: -10000, archTag: 'checksum', isCompatible: false, isRecommended: false };
+    }
+
+    // Ignore .zip archives unless specifically desired (Steam compatibility tools use tarballs)
+    if (name.endsWith('.zip')) {
+      return { score: -10000, archTag: 'zip', isCompatible: false, isRecommended: false };
+    }
+
     const isArchive = name.endsWith('.tar.gz') ||
       name.endsWith('.tar.xz') ||
       name.endsWith('.tar.zst') ||
       name.endsWith('.tar.bz2') ||
       name.endsWith('.tar') ||
-      name.endsWith('.zip') ||
       name.endsWith('.7z') ||
       name.includes('.tar.');
 
@@ -973,24 +1046,40 @@ Return ONLY valid JSON.`,
     return { score, archTag, isCompatible, isRecommended };
   }
 
-  // Helper to query GitHub releases for a repo
+  // Helper to query GitHub / Codeberg releases for a repo
   async function fetchRepoReleases(repoOwnerAndName: string, providerKey: string, hostInfo: ReturnType<typeof getHostArchitectureInfo>) {
     try {
-      const res = await fetch(`https://api.github.com/repos/${repoOwnerAndName}/releases?per_page=8`, {
-        headers: {
-          'User-Agent': 'ProtonLaunchOptionsManager/1.0',
-          'Accept': 'application/vnd.github.v3+json',
-        },
-      });
+      const providerInfo = RUNNER_REPOS[providerKey];
+      const isCodeberg = providerInfo?.providerType === 'codeberg';
+      const apiUrl = isCodeberg
+        ? `https://codeberg.org/api/v1/repos/${repoOwnerAndName}/releases?limit=8`
+        : `https://api.github.com/repos/${repoOwnerAndName}/releases?per_page=8`;
+
+      const headers: Record<string, string> = {
+        'User-Agent': 'ProtonLaunchOptionsManager/1.0',
+        'Accept': 'application/json',
+      };
+      if (!isCodeberg) {
+        headers['Accept'] = 'application/vnd.github.v3+json';
+      }
+
+      const res = await fetch(apiUrl, { headers });
       if (!res.ok) {
-        console.warn(`GitHub API ${repoOwnerAndName} status: ${res.status}`);
+        console.warn(`Release API (${providerKey}: ${repoOwnerAndName}) status: ${res.status}`);
         return [];
       }
       const data = await res.json();
       if (!Array.isArray(data)) return [];
 
       return data.map((rel: any) => {
-        const rawAssets = rel.assets || [];
+        let rawAssets = rel.assets || [];
+
+        if (providerKey === 'boxtron') {
+          rawAssets = rawAssets.filter((a: any) => a.name && a.name.toLowerCase().startsWith('boxtron'));
+        } else if (providerKey === 'roberta') {
+          rawAssets = rawAssets.filter((a: any) => a.name && a.name.toLowerCase().startsWith('roberta'));
+        }
+
         const processedAssets = rawAssets
           .map((a: any) => {
             const evaluation = scoreAssetForHost(a.name, hostInfo);
@@ -1019,12 +1108,12 @@ Return ONLY valid JSON.`,
           title: rel.name || rel.tag_name,
           publishedAt: rel.published_at,
           body: rel.body || '',
-          htmlUrl: rel.html_url,
+          htmlUrl: rel.html_url || (isCodeberg ? `https://codeberg.org/${repoOwnerAndName}/releases/tag/${rel.tag_name}` : `https://github.com/${repoOwnerAndName}/releases/tag/${rel.tag_name}`),
           repo: repoOwnerAndName,
           asset: primaryAsset,
           allAssets: processedAssets,
         };
-      });
+      }).filter((rel: any) => rel.asset && rel.asset.downloadUrl && rel.allAssets && rel.allAssets.length > 0);
     } catch (err) {
       console.error(`Error fetching releases for ${repoOwnerAndName}:`, err);
       return [];
@@ -1108,12 +1197,7 @@ Return ONLY valid JSON.`,
                   } catch {}
                 }
 
-                let totalSizeBytes = 0;
-                try {
-                  const files = fs.readdirSync(fullPath);
-                  totalSizeBytes = files.length * 1024 * 512;
-                } catch {}
-
+                let totalSizeBytes = getDirectorySizeBytes(fullPath);
                 const stat = fs.statSync(fullPath);
 
                 if (!installedRunners.some(r => r.displayTitle.toLowerCase() === displayTitle.toLowerCase())) {
@@ -1122,7 +1206,8 @@ Return ONLY valid JSON.`,
                     displayTitle,
                     fullPath,
                     modifiedTime: stat.mtime,
-                    approxSizeMb: Math.max(120, Math.round(totalSizeBytes / (1024 * 1024))),
+                    approxSizeMb: Math.round(totalSizeBytes / (1024 * 1024)),
+                    approxSizeFormatted: formatBytesReadable(totalSizeBytes),
                     source: 'compatibilitytools.d',
                   });
                 }
@@ -1293,12 +1378,12 @@ Return ONLY valid JSON.`,
 
       const contentLengthHeader = downloadRes.headers.get('content-length');
       const totalBytes = contentLengthHeader ? parseInt(contentLengthHeader, 10) : 0;
-      const totalMbStr = totalBytes > 0 ? (totalBytes / (1024 * 1024)).toFixed(1) : undefined;
+      const totalMbStr = totalBytes > 0 ? formatBytesReadable(totalBytes) : undefined;
 
       sendProgress({
         percent: 5,
         stage: 'downloading',
-        message: `Starting download: ${safeFileName} (${totalMbStr ? totalMbStr + ' MB' : 'Unknown size'})...`,
+        message: `Starting download: ${safeFileName} (${totalMbStr || 'Unknown size'})...`,
         totalMb: totalMbStr,
       });
 
@@ -1318,7 +1403,7 @@ Return ONLY valid JSON.`,
         const now = Date.now();
         if (now - lastReportTime > 150) {
           lastReportTime = now;
-          const dlMb = (receivedBytes / (1024 * 1024)).toFixed(1);
+          const dlMb = formatBytesReadable(receivedBytes);
           let pct = 5;
           if (totalBytes > 0) {
             pct = Math.min(75, 5 + Math.round((receivedBytes / totalBytes) * 70));
@@ -1329,7 +1414,7 @@ Return ONLY valid JSON.`,
           sendProgress({
             percent: pct,
             stage: 'downloading',
-            message: `Downloading archive: ${dlMb} MB ${totalMbStr ? '/ ' + totalMbStr + ' MB' : ''} (${pct}%)`,
+            message: `Downloading archive: ${dlMb} ${totalMbStr ? '/ ' + totalMbStr : ''} (${pct}%)`,
             downloadedMb: dlMb,
             totalMb: totalMbStr,
           });
