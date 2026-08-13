@@ -10,6 +10,24 @@ interface PresetProfilesModalProps {
 
 export const PRESET_PROFILES: PresetProfile[] = [
   {
+    id: 'korthos_low_latency_layer',
+    title: 'Low Latency Layer (Reflex / Anti-Lag 2)',
+    description: 'Enables Korthos Low Latency Layer (LOW_LATENCY_LAYER=1), Reflex interface, NVAPI support, and DXVK AMD GPU hiding.',
+    targetHardware: 'Korthos low_latency_layer + AMD / Nvidia Vulkan GPUs',
+    iconName: 'Zap',
+    enabledFlags: {
+      enable_low_latency_layer: true,
+      lll_reflex: true,
+      lll_dxvk_config: 'dxgi.hideAmdGpu = True',
+      enable_nvapi: true,
+      proton_use_ntsync: true,
+      gamemoderun: true,
+    },
+    customEnvVars: [],
+    extraArgs: '',
+    wrapperOrder: ['gamemoderun'],
+  },
+  {
     id: 'nvidia_rtx_ultra',
     title: 'Nvidia RTX / DLSS Ultra',
     description: 'Enables NVAPI for DLSS, DLSS 3 Frame Gen, NTSync kernel synchronization, and Feral GameMode priority.',

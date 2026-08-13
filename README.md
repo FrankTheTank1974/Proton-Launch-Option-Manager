@@ -37,8 +37,18 @@ A modern Linux gaming utility designed for Linux gamers, Steam Deck users, and p
 ### 🖥️ Portable C Code Generator
 * Generate standalone C99 source code wrappers and GTK3 desktop utilities for custom launchers—no web browser required at runtime.
 
+### ⚡ Low Latency Layer (LLL) Integration
+* Full support for Korthos Software's **[Low Latency Layer](https://github.com/Korthos-Software/low_latency_layer)** (`low_latency_layer`):
+  * `LOW_LATENCY_LAYER=1` (Main activation flag)
+  * `LOW_LATENCY_LAYER_REFLEX=1` (Expose `VK_NV_low_latency2` / Nvidia Reflex extension interface)
+  * `LOW_LATENCY_LAYER_DECOUPLED_MITIGATION=1` (Force mitigation for decoupled simulation and render queues)
+  * `LOW_LATENCY_LAYER_DISABLE=1` (Explicit layer override)
+  * `LOW_LATENCY_LAYER_NV_GPU_REPORT_AS_NVIDIA=1` (Debug vendor spoofing)
+  * `DXVK_CONFIG="dxgi.hideAmdGpu = True"` (DXVK AMD GPU hiding for in-game Reflex menus)
+  * `ENABLE_LAYER_MESA_ANTI_LAG=1` (Mesa RADV native Anti-Lag 2)
+
 ### ⚡ One-Click Preset Profiles
-* Instant configurations for *Steam Deck*, *NVIDIA RTX Ray Tracing*, *AMD Radeon High Performance*, *Low Latency Competitive*, and *Ultra-Wide Displays*.
+* Instant configurations for *Low Latency Layer (Reflex / Anti-Lag 2)*, *Steam Deck*, *NVIDIA RTX Ray Tracing*, *AMD Radeon High Performance*, *Low Latency Competitive*, and *Ultra-Wide Displays*.
 
 ### 🤖 Gemini AI Assistant
 * Powered by Google Gemini (`@google/genai`) to synthesize community insights and recommend tailored launch flags for specific games and hardware.

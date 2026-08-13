@@ -48,6 +48,7 @@ export const FlagChecklist: React.FC<FlagChecklistProps> = ({
     { id: 'all', label: 'All Flags', icon: <CheckSquare className="w-3.5 h-3.5" /> },
     { id: 'proton_runtime', label: 'Proton Runtime & Sync', icon: <Cpu className="w-3.5 h-3.5" /> },
     { id: 'graphics_dxvk', label: 'DXVK & NVAPI & Shaders', icon: <Zap className="w-3.5 h-3.5" /> },
+    { id: 'low_latency', label: 'Low Latency Layer (LLL)', icon: <Flame className="w-3.5 h-3.5 text-amber-400" /> },
     { id: 'performance_wrappers', label: 'Wrappers & Overlays', icon: <Activity className="w-3.5 h-3.5" /> },
     { id: 'display_gamescope', label: 'Gamescope', icon: <Layers className="w-3.5 h-3.5" /> },
     { id: 'debug_logs', label: 'Logs & Debug', icon: <Bug className="w-3.5 h-3.5" /> },
@@ -104,6 +105,10 @@ export const FlagChecklist: React.FC<FlagChecklistProps> = ({
             'mangohud',
             'enable_nvapi',
             'enable_lsfg',
+            'enable_low_latency_layer',
+            'lll_reflex',
+            'lll_decoupled_mitigation',
+            'lll_dxvk_config',
           ].includes(flag.id);
 
           return (

@@ -27,38 +27,45 @@ export function parseCommandString(commandStr: string): CommandState {
   const beforeCmd = (parts[0] || '').trim();
   const extraArgs = (parts[1] || '').trim();
 
-  const tokens = beforeCmd.split(/\s+/).filter(Boolean);
+  // Match key="value" or key='value' or key=value
+  const envVarRegex = /([A-Za-z0-9_]+)=(?:"([^"]*)"|'([^']*)'|(\S+))/g;
+  let match: RegExpExecArray | null;
+  let remainingText = beforeCmd;
 
-  tokens.forEach((token) => {
-    // Check key=value
-    if (token.includes('=')) {
-      const [key, val] = token.split('=');
-      const matchedFlag = PROTON_FLAGS.find((f) => f.key === key);
-      if (matchedFlag) {
-        if (matchedFlag.type === 'toggle') {
-          enabledFlags[matchedFlag.id] = val === '1' || val === 'true';
-        } else if (matchedFlag.type === 'select') {
-          enabledFlags[matchedFlag.id] = val;
-        }
-      } else {
-        // Custom Env Var
-        customEnvVars.push({
-          id: Math.random().toString(36).substring(2, 9),
-          key,
-          value: val || '',
-          enabled: true,
-        });
+  while ((match = envVarRegex.exec(beforeCmd)) !== null) {
+    const fullMatch = match[0];
+    const key = match[1];
+    const val = match[2] ?? match[3] ?? match[4] ?? '';
+
+    remainingText = remainingText.replace(fullMatch, '');
+
+    const matchedFlag = PROTON_FLAGS.find((f) => f.key === key);
+    if (matchedFlag) {
+      if (matchedFlag.type === 'toggle') {
+        enabledFlags[matchedFlag.id] = val === '1' || val === 'true';
+      } else if (matchedFlag.type === 'select') {
+        enabledFlags[matchedFlag.id] = val;
       }
     } else {
-      // Standalone wrapper token like gamemoderun or mangohud
-      const matchedWrapper = PROTON_FLAGS.find(
-        (f) => f.isWrapper && (f.key === token || token.startsWith(f.key))
-      );
-      if (matchedWrapper) {
-        enabledFlags[matchedWrapper.id] = true;
-        if (!wrapperOrder.includes(matchedWrapper.key)) {
-          wrapperOrder.push(matchedWrapper.key);
-        }
+      customEnvVars.push({
+        id: Math.random().toString(36).substring(2, 9),
+        key,
+        value: val,
+        enabled: true,
+      });
+    }
+  }
+
+  // Process remaining standalone wrapper tokens (like gamemoderun, mangohud, gamescope)
+  const remainingTokens = remainingText.split(/\s+/).filter(Boolean);
+  remainingTokens.forEach((token) => {
+    const matchedWrapper = PROTON_FLAGS.find(
+      (f) => f.isWrapper && (f.key === token || token.startsWith(f.key))
+    );
+    if (matchedWrapper) {
+      enabledFlags[matchedWrapper.id] = true;
+      if (!wrapperOrder.includes(matchedWrapper.key)) {
+        wrapperOrder.push(matchedWrapper.key);
       }
     }
   });
@@ -94,7 +101,9 @@ export function generateCommandString(
       }
     } else if (flag.type === 'select') {
       if (typeof val === 'string' && val.length > 0) {
-        envVars.push(`${flag.key}=${val}`);
+        const cleanVal = val.replace(/^["']|["']$/g, '');
+        const formattedVal = cleanVal.includes(' ') || cleanVal.includes('=') ? `"${cleanVal}"` : cleanVal;
+        envVars.push(`${flag.key}=${formattedVal}`);
       }
     }
   });
@@ -102,7 +111,10 @@ export function generateCommandString(
   // Custom environment variables
   customEnvVars.forEach((env) => {
     if (env.enabled && env.key.trim()) {
-      envVars.push(`${env.key.trim()}=${env.value.trim()}`);
+      const val = env.value.trim();
+      const cleanVal = val.replace(/^["']|["']$/g, '');
+      const formattedVal = (cleanVal.includes(' ') || cleanVal.includes('=')) ? `"${cleanVal}"` : cleanVal;
+      envVars.push(`${env.key.trim()}=${formattedVal}`);
     }
   });
 
