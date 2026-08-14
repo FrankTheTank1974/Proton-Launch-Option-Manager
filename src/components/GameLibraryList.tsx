@@ -1,6 +1,18 @@
 import React, { useState } from 'react';
 import { SteamGame } from '../types';
-import { Search, Star, Gamepad2, Plus, HardDrive, Image as ImageIcon, ArrowUpDown, ArrowUp, ArrowDown, CheckCircle2 } from 'lucide-react';
+import { 
+  Search, 
+  Star, 
+  Gamepad2, 
+  Plus, 
+  HardDrive, 
+  Image as ImageIcon, 
+  ArrowUpDown, 
+  ArrowUp, 
+  ArrowDown, 
+  CheckCircle2,
+  Rocket
+} from 'lucide-react';
 
 interface GameLibraryListProps {
   games: SteamGame[];
@@ -10,6 +22,7 @@ interface GameLibraryListProps {
   onOpenAddGame: () => void;
   onOpenScanLocalLibrary?: () => void;
   onOpenSteamGridDb?: (game: SteamGame) => void;
+  onDirectLaunchGame?: (game: SteamGame) => void;
   searchInputRef?: React.RefObject<HTMLInputElement | null>;
 }
 
@@ -21,6 +34,7 @@ export const GameLibraryList: React.FC<GameLibraryListProps> = ({
   onOpenAddGame,
   onOpenScanLocalLibrary,
   onOpenSteamGridDb,
+  onDirectLaunchGame,
   searchInputRef,
 }) => {
   const [search, setSearch] = useState('');
@@ -322,21 +336,36 @@ export const GameLibraryList: React.FC<GameLibraryListProps> = ({
                   )}
                 </div>
 
-                {/* Favorite Star Button */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleFavorite(game.id);
-                  }}
-                  className="absolute right-2 top-2 text-slate-600 hover:text-amber-400 transition"
-                  title="Toggle favorite"
-                >
-                  <Star
-                    className={`w-3.5 h-3.5 ${
-                      game.isFavorite ? 'fill-amber-400 text-amber-400' : ''
-                    }`}
-                  />
-                </button>
+                {/* Action Buttons (Direct Launch & Favorite) */}
+                <div className="absolute right-2 top-2 flex items-center space-x-1.5">
+                  {onDirectLaunchGame && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDirectLaunchGame(game);
+                      }}
+                      className="text-slate-500 hover:text-emerald-400 hover:bg-emerald-950/40 p-1 rounded transition opacity-70 group-hover:opacity-100"
+                      title={`Launch ${game.name} via Steam (steam://rungameid/${game.appId})`}
+                    >
+                      <Rocket className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleFavorite(game.id);
+                    }}
+                    className="text-slate-600 hover:text-amber-400 p-1 rounded transition"
+                    title="Toggle favorite"
+                  >
+                    <Star
+                      className={`w-3.5 h-3.5 ${
+                        game.isFavorite ? 'fill-amber-400 text-amber-400' : ''
+                      }`}
+                    />
+                  </button>
+                </div>
               </div>
             );
           })

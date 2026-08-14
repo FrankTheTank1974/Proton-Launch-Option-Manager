@@ -62,15 +62,17 @@ export function isSteamRuntimeOrTool(name: string): boolean {
   return false;
 }
 
-export function parseAppManifestAcf(acfText: string): { appId: string; name: string; installDate?: number } | null {
+export function parseAppManifestAcf(acfText: string): { appId: string; name: string; installDate?: number; installDirName?: string } | null {
   if (!acfText) return null;
   const appIdMatch = acfText.match(/"appid"\s*"(\d+)"/i);
   const nameMatch = acfText.match(/"name"\s*"([^"]*)"/i);
+  const installdirMatch = acfText.match(/"installdir"\s*"([^"]*)"/i);
   const lastUpdatedMatch = acfText.match(/"LastUpdated"\s*"(\d+)"/i) || acfText.match(/"installdate"\s*"(\d+)"/i);
   if (appIdMatch && nameMatch) {
     return {
       appId: appIdMatch[1],
       name: nameMatch[1],
+      installDirName: installdirMatch ? installdirMatch[1] : undefined,
       installDate: lastUpdatedMatch ? parseInt(lastUpdatedMatch[1], 10) * 1000 : undefined,
     };
   }

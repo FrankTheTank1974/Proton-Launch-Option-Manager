@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import child_process from 'child_process';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 
@@ -258,7 +259,16 @@ Return ONLY valid JSON.`,
   app.get('/api/steam/scan-local', (req, res) => {
     try {
       const homeDir = os.homedir();
-      const detectedGamesMap = new Map<string, { appId: number; name: string; currentLaunchOptions: string; sourcePath: string; installDate?: number }>();
+      const detectedGamesMap = new Map<string, { 
+        appId: number; 
+        name: string; 
+        currentLaunchOptions: string; 
+        sourcePath: string; 
+        installDate?: number;
+        installDirName?: string;
+        installedPath?: string;
+        executablePath?: string;
+      }>();
 
       const possiblePaths = [
         path.join(homeDir, '.local/share/Steam'),
@@ -338,6 +348,39 @@ Return ONLY valid JSON.`,
                     }
                   }
 
+                  const installdirMatch = acfText.match(/"installdir"\s*"([^"]*)"/i);
+                  const installDirName = installdirMatch ? installdirMatch[1] : name;
+                  const commonGamePath = path.join(appsDir, 'common', installDirName);
+
+                  let discoveredExePath = '';
+                  if (fs.existsSync(commonGamePath)) {
+                    try {
+                      // Fast scan common game directory for executable files (.exe or Linux binary)
+                      const scanExes = (dir: string, depth = 0): string | null => {
+                        if (depth > 3) return null;
+                        const entries = fs.readdirSync(dir, { withFileTypes: true });
+                        const files = entries.filter((e) => e.isFile());
+                        const dirs = entries.filter((e) => e.isDirectory() && !e.name.startsWith('.') && e.name !== 'CrashReport' && e.name !== 'DirectX' && e.name !== '_CommonRedist');
+                        
+                        // Check for prominent .exe files
+                        const exeFiles = files.filter((f) => f.name.endsWith('.exe') && !f.name.toLowerCase().includes('crash') && !f.name.toLowerCase().includes('unins') && !f.name.toLowerCase().includes('unitycrash'));
+                        if (exeFiles.length > 0) {
+                          // Prefer matching game name or shipping binaries
+                          const bestExe = exeFiles.find((f) => f.name.toLowerCase().includes('shipping') || f.name.toLowerCase().includes('win64') || f.name.toLowerCase().includes(installDirName.toLowerCase().replace(/[^a-z0-9]/g, ''))) || exeFiles[0];
+                          return path.relative(commonGamePath, path.join(dir, bestExe.name)).replace(/\\/g, '/');
+                        }
+
+                        for (const sub of dirs) {
+                          const res = scanExes(path.join(dir, sub.name), depth + 1);
+                          if (res) return res;
+                        }
+                        return null;
+                      };
+
+                      discoveredExePath = scanExes(commonGamePath) || '';
+                    } catch {}
+                  }
+
                   if (name && !isRuntime) {
                     detectedGamesMap.set(appId, {
                       appId: parseInt(appId, 10),
@@ -345,6 +388,9 @@ Return ONLY valid JSON.`,
                       currentLaunchOptions: '',
                       sourcePath: filePath,
                       installDate,
+                      installDirName,
+                      installedPath: commonGamePath,
+                      executablePath: discoveredExePath,
                     });
                   }
                 }
@@ -646,6 +692,81 @@ Return ONLY valid JSON.`,
     }
     return vdfText;
   }
+
+  // Steam Direct URI / System Launch Endpoint (Dispatches steam://rungameid/<appId> or steam command on Linux/macOS/Windows)
+  app.post('/api/steam/launch-game', (req, res) => {
+    try {
+      const { appId, gameName } = req.body;
+      if (!appId) {
+        return res.status(400).json({ success: false, error: 'AppId is required to launch game' });
+      }
+
+      const steamUri = `steam://rungameid/${appId}`;
+      const isLinux = os.platform() === 'linux';
+      const isMac = os.platform() === 'darwin';
+      const isWindows = os.platform() === 'win32';
+
+      let dispatchedCommand = '';
+      let executionMethod = 'browser_uri';
+
+      // Helper to safely spawn detached processes without unhandled ENOENT error event crashes
+      const safeSpawnDetached = (cmd: string, args: string[]) => {
+        try {
+          const child = child_process.spawn(cmd, args, {
+            detached: true,
+            stdio: 'ignore',
+          });
+          child.on('error', (err) => {
+            console.warn(`[SteamLauncher] Safe spawn notice for "${cmd}": ${err.message}`);
+          });
+          child.unref();
+          return true;
+        } catch (err: any) {
+          console.warn(`[SteamLauncher] Spawn exception for "${cmd}":`, err?.message);
+          return false;
+        }
+      };
+
+      // On server host (if running locally on user's machine / Steam Deck):
+      if (isLinux) {
+        const isFlatpakSteam = fs.existsSync(path.join(os.homedir(), '.var/app/com.valvesoftware.Steam'));
+        if (isFlatpakSteam) {
+          dispatchedCommand = `flatpak run com.valvesoftware.Steam "${steamUri}"`;
+          safeSpawnDetached('flatpak', ['run', 'com.valvesoftware.Steam', steamUri]);
+          executionMethod = 'flatpak_steam';
+        } else {
+          dispatchedCommand = `steam "${steamUri}"`;
+          safeSpawnDetached('steam', [steamUri]);
+          executionMethod = 'native_steam';
+        }
+      } else if (isMac) {
+        dispatchedCommand = `open "${steamUri}"`;
+        safeSpawnDetached('open', [steamUri]);
+        executionMethod = 'mac_open';
+      } else if (isWindows) {
+        dispatchedCommand = `start ${steamUri}`;
+        safeSpawnDetached('cmd.exe', ['/c', 'start', steamUri]);
+        executionMethod = 'win_start';
+      }
+
+      return res.json({
+        success: true,
+        appId: Number(appId),
+        gameName: gameName || `App ${appId}`,
+        steamUri,
+        dispatchedCommand,
+        executionMethod,
+        message: `Dispatched launch command for ${gameName || `App ${appId}`} via ${steamUri}`,
+      });
+    } catch (err: any) {
+      console.error('Launch game error:', err);
+      return res.status(500).json({
+        success: false,
+        error: err.message || 'Failed to dispatch launch command',
+        steamUri: `steam://rungameid/${req.body?.appId}`,
+      });
+    }
+  });
 
   // Steam Write Launch Options Endpoint (directly writes to localconfig.vdf on host)
   app.post('/api/steam/write-launch-options', (req, res) => {

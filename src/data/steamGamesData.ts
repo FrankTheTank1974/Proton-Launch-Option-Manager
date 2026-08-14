@@ -14,6 +14,8 @@ export const INITIAL_STEAM_GAMES: SteamGame[] = [
     releaseDate: '2020-12-10',
     isFavorite: true,
     developer: 'CD PROJEKT RED',
+    installDirName: 'Cyberpunk 2077',
+    executablePath: 'bin/x64/Cyberpunk2077.exe',
   },
   {
     id: 'eldenring',
@@ -28,6 +30,8 @@ export const INITIAL_STEAM_GAMES: SteamGame[] = [
     releaseDate: '2022-02-25',
     isFavorite: true,
     developer: 'FromSoftware Inc.',
+    installDirName: 'ELDEN RING',
+    executablePath: 'Game/eldenring.exe',
   },
   {
     id: 'bg3',
@@ -42,6 +46,8 @@ export const INITIAL_STEAM_GAMES: SteamGame[] = [
     releaseDate: '2023-08-03',
     isFavorite: true,
     developer: 'Larian Studios',
+    installDirName: 'Baldurs Gate 3',
+    executablePath: 'bin/bg3_dx11.exe',
   },
   {
     id: 'helldivers2',
@@ -56,6 +62,8 @@ export const INITIAL_STEAM_GAMES: SteamGame[] = [
     releaseDate: '2024-02-08',
     isFavorite: false,
     developer: 'Arrowhead Game Studios',
+    installDirName: 'HELLDIVERS 2',
+    executablePath: 'bin/helldivers2.exe',
   },
   {
     id: 'apexlegends',
@@ -70,6 +78,8 @@ export const INITIAL_STEAM_GAMES: SteamGame[] = [
     releaseDate: '2020-11-04',
     isFavorite: false,
     developer: 'Respawn Entertainment',
+    installDirName: 'Apex Legends',
+    executablePath: 'r5apex.exe',
   },
   {
     id: 'witcher3',
@@ -84,6 +94,8 @@ export const INITIAL_STEAM_GAMES: SteamGame[] = [
     releaseDate: '2015-05-18',
     isFavorite: false,
     developer: 'CD PROJEKT RED',
+    installDirName: 'The Witcher 3',
+    executablePath: 'bin/x64/witcher3.exe',
   },
   {
     id: 'godofwarragnarok',
@@ -98,6 +110,8 @@ export const INITIAL_STEAM_GAMES: SteamGame[] = [
     releaseDate: '2024-09-19',
     isFavorite: true,
     developer: 'Santa Monica Studio / Jetpack Interactive',
+    installDirName: 'God of War Ragnarok',
+    executablePath: 'GoWR.exe',
   },
   {
     id: 'rdr2',
@@ -112,5 +126,7 @@ export const INITIAL_STEAM_GAMES: SteamGame[] = [
     releaseDate: '2019-12-05',
     isFavorite: false,
     developer: 'Rockstar Games',
+    installDirName: 'Red Dead Redemption 2',
+    executablePath: 'RDR2.exe',
   },
 ];

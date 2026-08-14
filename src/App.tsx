@@ -16,9 +16,11 @@ import { ScanLocalLibraryModal } from './components/ScanLocalLibraryModal';
 import { ProtonManagerModal } from './components/ProtonManagerModal';
 import { BackupModal } from './components/BackupModal';
 import { SteamGridDbModal } from './components/SteamGridDbModal';
+import { DirectSteamLauncherModal } from './components/DirectSteamLauncherModal';
 import { ProtonVersionSelector } from './components/ProtonVersionSelector';
 import { PROTON_FLAGS } from './data/protonFlagsData';
-import { Sparkles, Terminal, Gamepad2, ShieldCheck, CheckCircle2, MessageSquareQuote, Image as ImageIcon } from 'lucide-react';
+import { launchSteamGame } from './utils/steamLauncher';
+import { Sparkles, Terminal, Gamepad2, ShieldCheck, CheckCircle2, MessageSquareQuote, Image as ImageIcon, Rocket } from 'lucide-react';
 
 export default function App() {
   const [games, setGames] = useState<SteamGame[]>(INITIAL_STEAM_GAMES);
@@ -73,6 +75,7 @@ export default function App() {
   const [isProtonManagerOpen, setIsProtonManagerOpen] = useState(false);
   const [isBackupOpen, setIsBackupOpen] = useState(false);
   const [isSteamGridDbOpen, setIsSteamGridDbOpen] = useState(false);
+  const [isSteamLauncherOpen, setIsSteamLauncherOpen] = useState(false);
 
   // Restore games from JSON backup
   const handleImportBackupGames = (importedGames: SteamGame[]) => {
@@ -379,6 +382,15 @@ export default function App() {
               setSelectedGameId(g.id);
               setIsSteamGridDbOpen(true);
             }}
+            onDirectLaunchGame={async (g) => {
+              setSelectedGameId(g.id);
+              try {
+                await launchSteamGame(g.appId, g.name);
+                showToast(`🚀 Dispatched Steam launch for ${g.name}`);
+              } catch {
+                showToast(`Triggered steam://rungameid/${g.appId}`);
+              }
+            }}
             searchInputRef={searchInputRef}
           />
         </div>
@@ -436,6 +448,14 @@ export default function App() {
             </div>
 
             <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setIsSteamLauncherOpen(true)}
+                className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold px-3 py-1.5 rounded-xl text-xs flex items-center space-x-1.5 transition shadow-sm"
+                title="Launch game via Steam client or export launcher shortcuts"
+              >
+                <Rocket className="w-3.5 h-3.5" />
+                <span>Launch via Steam</span>
+              </button>
               <button
                 onClick={() => setIsSteamGridDbOpen(true)}
                 className="bg-purple-900/40 hover:bg-purple-900/70 text-purple-200 border border-purple-700/50 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm"
@@ -573,6 +593,14 @@ export default function App() {
         game={selectedGame}
         onUpdateGameCover={handleUpdateGameCover}
         showToast={showToast}
+      />
+
+      <DirectSteamLauncherModal
+        isOpen={isSteamLauncherOpen}
+        onClose={() => setIsSteamLauncherOpen(false)}
+        game={selectedGame}
+        currentLaunchOptions={currentCommandString}
+        onShowToast={showToast}
       />
     </div>
   );

@@ -61,6 +61,8 @@ export interface SteamGame {
   releaseDate?: string; // Release date (e.g. YYYY-MM-DD)
   isFavorite?: boolean;
   installedPath?: string;
+  installDirName?: string;
+  executablePath?: string;
   developer?: string;
 }
 

@@ -7,13 +7,18 @@ import {
   Code2, 
   Copy, 
   Check, 
-  Download, 
   Terminal, 
   FileCode, 
   FolderArchive, 
-  CheckCircle2,
-  Cpu,
-  Boxes
+  ShieldAlert,
+  Sparkles,
+  Search,
+  History,
+  Play,
+  Layout,
+  FileText,
+  Wrench,
+  Layers
 } from 'lucide-react';
 
 interface CCodeGeneratorModalProps {
@@ -38,7 +43,7 @@ export const CCodeGeneratorModal: React.FC<CCodeGeneratorModalProps> = ({
   if (!isOpen) return null;
 
   const cFiles = getCCodeTemplates(selectedGame.name, selectedGame.appId, currentCommand, games);
-  const currentFile = cFiles[activeFileIndex];
+  const currentFile = cFiles[activeFileIndex] || cFiles[0];
 
   const handleCopy = () => {
     navigator.clipboard.writeText(currentFile.content);
@@ -91,9 +96,25 @@ export const CCodeGeneratorModal: React.FC<CCodeGeneratorModalProps> = ({
     }
   };
 
+  const getFileIcon = (filename: string, isActive: boolean) => {
+    const iconClass = `w-4 h-4 ${isActive ? 'text-cyan-400' : 'text-slate-400'}`;
+    if (filename.includes('conflict')) return <ShieldAlert className={iconClass} />;
+    if (filename.includes('preset')) return <Sparkles className={iconClass} />;
+    if (filename.includes('scanner')) return <Search className={iconClass} />;
+    if (filename.includes('backup')) return <History className={iconClass} />;
+    if (filename.includes('launcher')) return <Play className={iconClass} />;
+    if (filename.includes('tui') || filename.includes('cli') || filename.endsWith('.sh')) {
+      return <Terminal className={iconClass} />;
+    }
+    if (filename === 'main.c') return <Layout className={iconClass} />;
+    if (filename.endsWith('.md')) return <FileText className={iconClass} />;
+    if (filename === 'Makefile' || filename.includes('CMake')) return <Wrench className={iconClass} />;
+    return <FileCode className={iconClass} />;
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-5xl h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-6xl h-[88vh] flex flex-col shadow-2xl overflow-hidden">
         
         {/* Modal Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950">
@@ -102,14 +123,16 @@ export const CCodeGeneratorModal: React.FC<CCodeGeneratorModalProps> = ({
               <Code2 className="w-5 h-5 text-cyan-400" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                <span>Portable Linux C Source Code Generator</span>
-                <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-mono px-2 py-0.5 rounded-full font-semibold">
-                  GTK3 / C99 / Portable
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base font-bold text-slate-100">
+                  Portable Linux C Source Code Generator
+                </h2>
+                <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-mono px-2 py-0.5 rounded-full font-semibold">
+                  100% Offline C99 / Pure Libc + GTK3
                 </span>
-              </h2>
-              <p className="text-xs text-slate-400">
-                Easily compile across Arch, Ubuntu, Fedora, Gentoo, and SteamOS with GTK3 or Makefile
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Includes Conflict Detector, Presets, Library Scanner, VDF Backups, ANSI TUI & Steam Launcher
               </p>
             </div>
           </div>
@@ -130,7 +153,7 @@ export const CCodeGeneratorModal: React.FC<CCodeGeneratorModalProps> = ({
               className="bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition shadow-md disabled:opacity-50"
             >
               <FolderArchive className="w-4 h-4" />
-              <span>{downloading ? 'Zipping...' : 'Download C Project ZIP'}</span>
+              <span>{downloading ? 'Zipping...' : 'Download Full C Project (.ZIP)'}</span>
             </button>
 
             <button
@@ -142,18 +165,42 @@ export const CCodeGeneratorModal: React.FC<CCodeGeneratorModalProps> = ({
           </div>
         </div>
 
+        {/* Feature Badges Banner */}
+        <div className="bg-slate-950/60 border-b border-slate-800/80 px-4 py-2 flex items-center gap-3 overflow-x-auto text-[11px] font-mono text-slate-300">
+          <span className="text-slate-500 font-semibold uppercase tracking-wider text-[10px] flex items-center gap-1 shrink-0">
+            <Layers className="w-3.5 h-3.5 text-cyan-400" /> Embedded Offline Modules:
+          </span>
+          <span className="bg-slate-900 border border-slate-700/60 px-2 py-0.5 rounded text-amber-300 shrink-0">
+            🛡️ Conflict Detector
+          </span>
+          <span className="bg-slate-900 border border-slate-700/60 px-2 py-0.5 rounded text-purple-300 shrink-0">
+            ✨ Built-in Presets
+          </span>
+          <span className="bg-slate-900 border border-slate-700/60 px-2 py-0.5 rounded text-cyan-300 shrink-0">
+            🔍 Library Auto-Scanner
+          </span>
+          <span className="bg-slate-900 border border-slate-700/60 px-2 py-0.5 rounded text-emerald-300 shrink-0">
+            📦 VDF Backups & Rollback
+          </span>
+          <span className="bg-slate-900 border border-slate-700/60 px-2 py-0.5 rounded text-sky-300 shrink-0">
+            🖥️ ANSI Terminal TUI
+          </span>
+          <span className="bg-slate-900 border border-slate-700/60 px-2 py-0.5 rounded text-rose-300 shrink-0">
+            🚀 Steam URI Launcher
+          </span>
+        </div>
+
         {/* Modal Body: File Tree Sidebar + Code Viewer */}
         <div className="flex-1 flex overflow-hidden">
           
           {/* File Selector Sidebar */}
-          <div className="w-64 bg-slate-950 border-r border-slate-800 p-3 space-y-1.5 overflow-y-auto">
-            <div className="text-[11px] font-mono font-semibold text-slate-500 uppercase tracking-wider px-2 mb-2">
-              Project Structure
+          <div className="w-72 bg-slate-950 border-r border-slate-800 p-3 space-y-1.5 overflow-y-auto">
+            <div className="text-[11px] font-mono font-semibold text-slate-500 uppercase tracking-wider px-2 mb-2 flex items-center justify-between">
+              <span>Project Files ({cFiles.length})</span>
             </div>
 
             {cFiles.map((file, idx) => {
               const isActive = idx === activeFileIndex;
-              const isSh = file.filename.endsWith('.sh');
               return (
                 <button
                   key={file.filename}
@@ -164,11 +211,7 @@ export const CCodeGeneratorModal: React.FC<CCodeGeneratorModalProps> = ({
                       : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200 border border-transparent'
                   }`}
                 >
-                  {isSh ? (
-                    <Terminal className={`w-4 h-4 ${isActive ? 'text-cyan-400' : 'text-amber-400'}`} />
-                  ) : (
-                    <FileCode className={`w-4 h-4 ${isActive ? 'text-cyan-400' : 'text-slate-500'}`} />
-                  )}
+                  {getFileIcon(file.filename, isActive)}
                   <span className="truncate">{file.filename}</span>
                 </button>
               );
@@ -176,10 +219,13 @@ export const CCodeGeneratorModal: React.FC<CCodeGeneratorModalProps> = ({
 
             <div className="pt-4 border-t border-slate-800/80 mt-4 px-2 space-y-2">
               <div className="text-[11px] text-slate-400 font-mono font-semibold">
-                Build Command (Terminal):
+                Quick Build Commands:
               </div>
-              <div className="bg-slate-900 p-2 rounded-lg text-[10px] font-mono text-slate-300 border border-slate-800 break-all select-all">
-                gcc -o proton_mgr main.c vdf_parser.c $(pkg-config --cflags --libs gtk+-3.0)
+              <div className="bg-slate-900 p-2 rounded-lg text-[10px] font-mono text-slate-300 border border-slate-800 space-y-1">
+                <div className="text-cyan-400 font-semibold"># Compile CLI (zero deps):</div>
+                <div className="select-all text-slate-300">make</div>
+                <div className="text-cyan-400 font-semibold pt-1"># Run ANSI TUI:</div>
+                <div className="select-all text-slate-300">./proton_cli -i</div>
               </div>
             </div>
           </div>
@@ -189,19 +235,19 @@ export const CCodeGeneratorModal: React.FC<CCodeGeneratorModalProps> = ({
             
             {/* File Info Bar */}
             <div className="flex items-center justify-between px-4 py-2.5 bg-slate-950/80 border-b border-slate-800">
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 truncate">
                 <span className="font-mono text-xs font-bold text-cyan-300">
                   {currentFile.filename}
                 </span>
                 <span className="text-xs text-slate-500">•</span>
-                <span className="text-xs text-slate-400">
+                <span className="text-xs text-slate-400 truncate">
                   {currentFile.description}
                 </span>
               </div>
 
               <button
                 onClick={handleCopy}
-                className="flex items-center space-x-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1 rounded-lg text-xs font-medium transition"
+                className="flex items-center space-x-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1 rounded-lg text-xs font-medium transition shrink-0 ml-2"
               >
                 {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{copied ? 'Copied!' : 'Copy Code'}</span>

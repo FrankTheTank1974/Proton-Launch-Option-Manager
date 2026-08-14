@@ -35,8 +35,14 @@ A modern Linux gaming utility designed for Linux gamers, Steam Deck users, and p
   * **[Proton-EM](https://github.com/Etaash-mathamsetty/Proton)** (Etaash Mathamsetty performance builds)
   * **[Proton-DW](https://dawn.wine/dawn-winery/dwproton)** (Dawn Winery / DWProton)
 
-### 🖥️ Portable C Code Generator
-* Generate standalone C99 source code wrappers and GTK3 desktop utilities for custom launchers—no web browser required at runtime.
+### 🖥️ Portable C Code Generator & Offline CLI/TUI
+* Generate 100% offline, zero-dependency C99 source code wrappers (`proton_cli`) and GTK3 desktop utilities (`proton_mgr`)—no web browser required at runtime:
+  * 🛡️ **Flag Conflict & Incompatibility Detector (`conflicts.c` / `conflicts.h`)**: Detects mutual exclusions (e.g. WineD3D vs Vulkan, duplicate CPU wrappers, sync disablers vs NTSYNC) with `--auto-fix`.
+  * ✨ **Game Presets & Profiles (`presets.c` / `presets.h`)**: Built-in curated profiles (Steam Deck Optimal, Esports / High FPS, Ray Tracing & DLSS, Retro Legacy, Lossless Scaling, and Battery Saver).
+  * 🔍 **Steam Library Auto-Discovery (`scanner.c` / `scanner.h`)**: Parses `libraryfolders.vdf` and `appmanifest_*.acf` across internal/external drive mounts to discover and target installed games.
+  * 📦 **VDF Backup & Rollback Manager (`backup.c` / `backup.h`)**: Automatically creates timestamped backups of `localconfig.vdf` before applying edits with single-command rollback (`--restore latest`).
+  * 🖥️ **ANSI Terminal Interactive UI (`tui.c` / `tui.h`)**: Full interactive terminal UI with live preview and keyboard navigation (`w/s/space/p/s/x`) without requiring `ncurses` or GUI libraries.
+  * 🚀 **Direct Steam URI Launcher (`launcher.c` / `launcher.h`)**: Dispatches async launches via `steam://rungameid/<appid>` with Native and Flatpak Steam client detection.
 
 ### ⚡ Low Latency Layer (LLL) Integration
 Full support for Korthos Software's **[Low Latency Layer](https://github.com/Korthos-Software/low_latency_layer)** (`low_latency_layer`).
