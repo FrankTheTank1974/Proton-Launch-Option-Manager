@@ -26,14 +26,14 @@ A modern Linux gaming utility designed for Linux gamers, Steam Deck users, and p
 
 ### 🔥 Proton Runner Manager (ProtonUp-Qt Style)
 * Discover, download, and manage custom Proton runner releases directly in Steam's `compatibilitytools.d`:
-  * **GE-Proton** (GloriousEggroll)
-  * **Proton-CachyOS** (Compiler-optimized x86-64-v3/v4 builds)
-  * **Proton-RTSP** (SpookySkeletons GStreamer runner for VRChat & RTSP/HLS livestreams)
-  * **Luxtorpeda** (Native Linux game engine compatibility tool from Codeberg)
-  * **Boxtron** (Steam compatibility tool for DOS games using DOSBox/DOSBox-Staging)
-  * **Roberta** (Steam compatibility tool for adventure games using ScummVM)
-  * **Proton-EM** (Etaash Mathamsetty performance builds)
-  * **Proton-DW** (Wine-GE / DirectWay)
+  * **[GE-Proton](https://github.com/GloriousEggroll/proton-ge-custom)** (GloriousEggroll)
+  * **[Proton-CachyOS](https://github.com/CachyOS/proton-cachyos)** (Compiler-optimized x86-64-v3/v4 builds)
+  * **[Proton-RTSP](https://github.com/SpookySkeletons/proton-rtsp)** (SpookySkeletons GStreamer runner for VRChat & RTSP/HLS livestreams)
+  * **[Luxtorpeda](https://github.com/luxtorpeda-dev/luxtorpeda)** (Native Linux game engine compatibility tool from Codeberg)
+  * **[Boxtron](https://github.com/dreamer/boxtron)** (Steam compatibility tool for DOS games using DOSBox/DOSBox-Staging)
+  * **[Roberta](https://github.com/dreamer/roberta)** (Steam compatibility tool for adventure games using ScummVM)
+  * **[Proton-EM](https://github.com/Etaash-mathamsetty/Proton)** (Etaash Mathamsetty performance builds)
+  * **[Proton-DW](https://dawn.wine/dawn-winery/dwproton)** (Dawn Winery / DWProton)
 
 ### 🖥️ Portable C Code Generator
 * Generate standalone C99 source code wrappers and GTK3 desktop utilities for custom launchers—no web browser required at runtime.
@@ -112,7 +112,7 @@ Config options for **[Proton-EM](https://github.com/Etaash-mathamsetty)** with e
 </details>
 
 ### 🛡️ Proton-DW Options
-Config options for **Proton-DW** (DeepWine) compatibility runner for online games & Asian titles.
+Config options for **[Proton-DW / DWProton](https://dawn.wine/dawn-winery/dwproton)** (Dawn Winery / DWProton compatibility runner) for online games & Asian titles.
 
 <details>
 <summary><b>View Proton-DW Config Options</b></summary>
