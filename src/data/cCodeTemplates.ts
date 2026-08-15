@@ -1,5 +1,43 @@
 import { CSourceFile, SteamGame } from '../types';
 import { INITIAL_STEAM_GAMES } from './steamGamesData';
+import { PROTON_FLAGS } from './protonFlagsData';
+
+function isWrapperFlag(f: any): boolean {
+  return f.category === 'performance_wrappers' || f.id === 'gamescope_wrapper' || f.id === 'obs_gamecapture';
+}
+
+function getWrapperOrder(f: any): number {
+  if (f.id === 'mangohud' || f.id === 'obs_gamecapture') return 1;
+  if (f.id === 'gamemoderun' || f.id === 'game_performance') return 2;
+  if (f.id === 'gamescope_wrapper') return 3;
+  return 1;
+}
+
+function generateCFlagsArray(): string {
+  return PROTON_FLAGS.map(f => {
+    const isWrapper = isWrapperFlag(f);
+    const wrapperOrder = isWrapper ? getWrapperOrder(f) : 0;
+
+    let envVar = '';
+    if (isWrapper) {
+      if (f.id === 'gamescope_wrapper') envVar = 'gamescope -w 1920 -h 1080 -r 144 -f --';
+      else if (f.id === 'gamemoderun') envVar = 'gamemoderun';
+      else if (f.id === 'mangohud') envVar = 'mangohud';
+      else if (f.id === 'obs_gamecapture') envVar = 'obs-gamecapture';
+      else if (f.id === 'game_performance') envVar = 'game-performance';
+      else envVar = f.key;
+    } else if (f.type === 'toggle') {
+      envVar = `${f.key}=1`;
+    } else {
+      const match = (f.example || '').replace(' %command%', '').trim();
+      envVar = match || `${f.key}=1`;
+    }
+
+    const cleanName = f.name.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const cleanEnvVar = envVar.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    return `    { "${cleanName}", "${cleanEnvVar}", ${isWrapper}, ${wrapperOrder}, false }`;
+  }).join(',\n');
+}
 
 export function getCCodeTemplates(selectedGameName: string, selectedAppId: number, currentCommand: string, gamesList: SteamGame[] = []): CSourceFile[] {
   const gamesToUse = gamesList.length > 0 ? [...gamesList] : [...INITIAL_STEAM_GAMES];
@@ -20,7 +58,8 @@ export function getCCodeTemplates(selectedGameName: string, selectedAppId: numbe
   }
 
   const escapedSelectedGameName = selectedGameName.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-  const initialGameArray = gamesToUse.map(g => `    { "${g.name.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}", ${g.appId} }`).join(',\n');
+  const initialGameArray = gamesToUse.map(g => `    { "${g.name.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}", ${g.appId}, 0 }`).join(',\n');
+  const cFlagsArray = generateCFlagsArray();
 
   return [
     {
@@ -40,6 +79,9 @@ export function getCCodeTemplates(selectedGameName: string, selectedAppId: numbe
  *   6. Direct Steam URI Game Launcher
  */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -58,22 +100,7 @@ export function getCCodeTemplates(selectedGameName: string, selectedAppId: numbe
 #define MAX_CMD_LEN 2048
 
 static ProtonFlag g_flags[] = {
-    {"PROTON_USE_WINED3D", "PROTON_USE_WINED3D=1", false, 0, false},
-    {"PROTON_USE_NTSYNC", "PROTON_USE_NTSYNC=1", false, 0, false},
-    {"DISABLE_SHADER_CACHE", "DISABLE_SHADER_CACHE=1", false, 0, false},
-    {"gamemoderun (GameMode)", "gamemoderun", true, 2, false},
-    {"game-performance (CachyOS)", "game-performance", true, 2, false},
-    {"lsvk (VKD3D Ray Tracing)", "VKD3D_CONFIG=dxr11,dxr", false, 0, false},
-    {"mangohud (FPS Overlay)", "mangohud", true, 1, false},
-    {"ENABLE_NVAPI (DLSS/Reflex)", "PROTON_ENABLE_NVAPI=1", false, 0, false},
-    {"lsfg-vk (Lossless Scaling)", "ENABLE_LSFG=1 LSFGVK_MULTIPLIER=2", false, 0, false},
-    {"Gamescope Compositor", "gamescope -w 1920 -h 1080 -r 144 -f --", true, 3, false},
-    {"PROTON_LOG (Debugging)", "PROTON_LOG=1", false, 0, false},
-    {"PROTON_NO_ESYNC", "PROTON_NO_ESYNC=1", false, 0, false},
-    {"PROTON_NO_FSYNC", "PROTON_NO_FSYNC=1", false, 0, false},
-    {"PROTON_ENABLE_WAYLAND", "PROTON_ENABLE_WAYLAND=1", false, 0, false},
-    {"cachyos_dlss_upgrade", "PROTON_ENABLE_NVNGX=1 PROTON_DLSS_UPGRADE=1", false, 0, false},
-    {"cachyos_vkreflex", "DXVK_ENABLE_NVAPI=1 PROTON_ENABLE_NVAPI=1", false, 0, false}
+${cFlagsArray}
 };
 
 static const int NUM_FLAGS = sizeof(g_flags) / sizeof(g_flags[0]);
@@ -177,7 +204,7 @@ int main(int argc, char *argv[]) {
     while ((opt = getopt_long(argc, argv, "ip:lg:cwx h", long_options, &opt_idx)) != -1) {
         switch (opt) {
             case 'i': opt_interactive = true; break;
-            case 'p': strncpy(opt_preset_name, optarg, sizeof(opt_preset_name) - 1); break;
+            case 'p': snprintf(opt_preset_name, sizeof(opt_preset_name), "%s", optarg); break;
             case 1001: opt_list_presets = true; break;
             case 'l': opt_list_games = true; break;
             case 'g': {
@@ -189,7 +216,7 @@ int main(int argc, char *argv[]) {
                     SteamGameInfo found;
                     if (find_game_by_name(optarg, &found)) {
                         g_target_appid = found.app_id;
-                        strncpy(g_target_gamename, found.name, sizeof(g_target_gamename) - 1);
+                        snprintf(g_target_gamename, sizeof(g_target_gamename), "%s", found.name);
                         printf("🎯 Target Game matched: %s (AppID: %d)\\n", g_target_gamename, g_target_appid);
                     }
                 }
@@ -201,7 +228,7 @@ int main(int argc, char *argv[]) {
             case 'x': opt_launch = true; break;
             case 1003: opt_backup = true; break;
             case 1004: opt_list_backups = true; break;
-            case 1005: strncpy(opt_restore_target, optarg, sizeof(opt_restore_target) - 1); break;
+            case 1005: snprintf(opt_restore_target, sizeof(opt_restore_target), "%s", optarg); break;
             case 'h': print_usage(argv[0]); return 0;
             default: print_usage(argv[0]); return 1;
         }
@@ -327,7 +354,7 @@ int main(int argc, char *argv[]) {
 #include <stdbool.h>
 
 typedef struct {
-    char name[64];
+    char name[128];
     char env_var[128];
     bool is_wrapper;
     int wrapper_order;
@@ -341,11 +368,11 @@ typedef enum {
 
 typedef struct {
     char id[32];
-    char title[64];
+    char title[128];
     char message[256];
     char recommendation[256];
     ConflictSeverity severity;
-    char conflicting_flags[4][64];
+    char conflicting_flags[4][128];
     int num_conflicting;
 } FlagConflict;
 
@@ -364,6 +391,9 @@ void auto_resolve_conflicts(ProtonFlag *flags, int num_flags, const FlagConflict
  * conflicts.c - Flag Incompatibility & Conflict Detection Implementation
  */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 #include "conflicts.h"
 #include <stdio.h>
 #include <string.h>
@@ -395,10 +425,10 @@ int detect_conflicts(const ProtonFlag *flags, int num_flags, FlagConflict *out_c
             is_flag_active(flags, num_flags, "dxr")) {
             if (count < max_conflicts) {
                 FlagConflict *c = &out_conflicts[count++];
-                strncpy(c->id, "wined3d_vs_vulkan", sizeof(c->id));
-                strncpy(c->title, "WineD3D (OpenGL) vs Vulkan/DXVK Features", sizeof(c->title));
-                strncpy(c->message, "PROTON_USE_WINED3D forces OpenGL translation, disabling DXVK, VKD3D, and NVAPI Vulkan layers.", sizeof(c->message));
-                strncpy(c->recommendation, "Disable PROTON_USE_WINED3D to enable Vulkan, DXVK, and NVAPI features.", sizeof(c->recommendation));
+                snprintf(c->id, sizeof(c->id), "wined3d_vs_vulkan");
+                snprintf(c->title, sizeof(c->title), "WineD3D (OpenGL) vs Vulkan/DXVK Features");
+                snprintf(c->message, sizeof(c->message), "PROTON_USE_WINED3D forces OpenGL translation, disabling DXVK, VKD3D, and NVAPI Vulkan layers.");
+                snprintf(c->recommendation, sizeof(c->recommendation), "Disable PROTON_USE_WINED3D to enable Vulkan, DXVK, and NVAPI features.");
                 c->severity = SEVERITY_ERROR;
             }
         }
@@ -408,10 +438,10 @@ int detect_conflicts(const ProtonFlag *flags, int num_flags, FlagConflict *out_c
     if (is_flag_active(flags, num_flags, "gamemoderun") && is_flag_active(flags, num_flags, "game-performance")) {
         if (count < max_conflicts) {
             FlagConflict *c = &out_conflicts[count++];
-            strncpy(c->id, "dual_cpu_wrappers", sizeof(c->id));
-            strncpy(c->title, "Conflicting CPU Performance Wrappers", sizeof(c->title));
-            strncpy(c->message, "Both 'gamemoderun' (Feral) and 'game-performance' (CachyOS) are active simultaneously.", sizeof(c->message));
-            strncpy(c->recommendation, "Use 'game-performance' on CachyOS or 'gamemoderun' on standard distros.", sizeof(c->recommendation));
+            snprintf(c->id, sizeof(c->id), "dual_cpu_wrappers");
+            snprintf(c->title, sizeof(c->title), "Conflicting CPU Performance Wrappers");
+            snprintf(c->message, sizeof(c->message), "Both 'gamemoderun' (Feral) and 'game-performance' (CachyOS) are active simultaneously.");
+            snprintf(c->recommendation, sizeof(c->recommendation), "Use 'game-performance' on CachyOS or 'gamemoderun' on standard distros.");
             c->severity = SEVERITY_WARNING;
         }
     }
@@ -421,10 +451,10 @@ int detect_conflicts(const ProtonFlag *flags, int num_flags, FlagConflict *out_c
         (is_flag_active(flags, num_flags, "PROTON_NO_ESYNC") || is_flag_active(flags, num_flags, "PROTON_NO_FSYNC"))) {
         if (count < max_conflicts) {
             FlagConflict *c = &out_conflicts[count++];
-            strncpy(c->id, "ntsync_vs_sync_disablers", sizeof(c->id));
-            strncpy(c->title, "NTSYNC Active with Synchronization Disablers", sizeof(c->title));
-            strncpy(c->message, "PROTON_USE_NTSYNC activates kernel /dev/ntsync, but Esync/Fsync disablers are also checked.", sizeof(c->message));
-            strncpy(c->recommendation, "Uncheck PROTON_NO_ESYNC and PROTON_NO_FSYNC for clean NTSYNC operation.", sizeof(c->recommendation));
+            snprintf(c->id, sizeof(c->id), "ntsync_vs_sync_disablers");
+            snprintf(c->title, sizeof(c->title), "NTSYNC Active with Synchronization Disablers");
+            snprintf(c->message, sizeof(c->message), "PROTON_USE_NTSYNC activates kernel /dev/ntsync, but Esync/Fsync disablers are also checked.");
+            snprintf(c->recommendation, sizeof(c->recommendation), "Uncheck PROTON_NO_ESYNC and PROTON_NO_FSYNC for clean NTSYNC operation.");
             c->severity = SEVERITY_WARNING;
         }
     }
@@ -433,10 +463,10 @@ int detect_conflicts(const ProtonFlag *flags, int num_flags, FlagConflict *out_c
     if (is_flag_active(flags, num_flags, "gamescope") && is_flag_active(flags, num_flags, "PROTON_ENABLE_WAYLAND")) {
         if (count < max_conflicts) {
             FlagConflict *c = &out_conflicts[count++];
-            strncpy(c->id, "gamescope_vs_wayland", sizeof(c->id));
-            strncpy(c->title, "Gamescope vs Proton Native Wayland Driver", sizeof(c->title));
-            strncpy(c->message, "Gamescope creates an XWayland container, while PROTON_ENABLE_WAYLAND bypasses XWayland.", sizeof(c->message));
-            strncpy(c->recommendation, "Disable PROTON_ENABLE_WAYLAND when wrapping with Gamescope.", sizeof(c->recommendation));
+            snprintf(c->id, sizeof(c->id), "gamescope_vs_wayland");
+            snprintf(c->title, sizeof(c->title), "Gamescope vs Proton Native Wayland Driver");
+            snprintf(c->message, sizeof(c->message), "%s", "Gamescope creates an XWayland container, while PROTON_ENABLE_WAYLAND bypasses XWayland.");
+            snprintf(c->recommendation, sizeof(c->recommendation), "%s", "Disable PROTON_ENABLE_WAYLAND when wrapping with Gamescope.");
             c->severity = SEVERITY_WARNING;
         }
     }
@@ -447,10 +477,10 @@ int detect_conflicts(const ProtonFlag *flags, int num_flags, FlagConflict *out_c
         !is_flag_active(flags, num_flags, "PROTON_USE_NTSYNC")) {
         if (count < max_conflicts) {
             FlagConflict *c = &out_conflicts[count++];
-            strncpy(c->id, "no_esync_no_fsync", sizeof(c->id));
-            strncpy(c->title, "Both Esync and Fsync Disabled", sizeof(c->title));
-            strncpy(c->message, "Disabling both Esync and Fsync forces Wine to use high-overhead server event objects.", sizeof(c->message));
-            strncpy(c->recommendation, "Leave at least Esync or Fsync enabled for normal multi-threading performance.", sizeof(c->recommendation));
+            snprintf(c->id, sizeof(c->id), "no_esync_no_fsync");
+            snprintf(c->title, sizeof(c->title), "Both Esync and Fsync Disabled");
+            snprintf(c->message, sizeof(c->message), "Disabling both Esync and Fsync forces Wine to use high-overhead server event objects.");
+            snprintf(c->recommendation, sizeof(c->recommendation), "Leave at least Esync or Fsync enabled for normal multi-threading performance.");
             c->severity = SEVERITY_WARNING;
         }
     }
@@ -507,10 +537,10 @@ void auto_resolve_conflicts(ProtonFlag *flags, int num_flags, const FlagConflict
 
 typedef struct {
     char id[32];
-    char name[64];
-    char description[160];
+    char name[128];
+    char description[256];
     char custom_args[128];
-    char active_flags[8][64];
+    char active_flags[8][128];
     int num_active_flags;
 } GamePreset;
 
@@ -530,6 +560,9 @@ bool apply_preset(ProtonFlag *flags, int num_flags, const char *preset_id_or_nam
  * presets.c - Preset Profiles Implementation
  */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 #include "presets.h"
 #include <stdio.h>
 #include <string.h>
@@ -633,8 +666,7 @@ bool apply_preset(ProtonFlag *flags, int num_flags, const char *preset_id_or_nam
     }
 
     if (out_custom_args && max_args > 0) {
-        strncpy(out_custom_args, target->custom_args, max_args - 1);
-        out_custom_args[max_args - 1] = 0;
+        snprintf(out_custom_args, max_args, "%s", target->custom_args);
     }
 
     return true;
@@ -657,6 +689,7 @@ bool apply_preset(ProtonFlag *flags, int num_flags, const char *preset_id_or_nam
 #include "vdf_parser.h"
 
 int scan_all_steam_libraries(SteamGameInfo *out_games, int max_games);
+int scan_steam_library_dir(const char *steamapps_dir, SteamGameInfo *out_games, int max_games);
 bool find_game_by_name(const char *search_query, SteamGameInfo *out_game);
 bool find_game_by_appid(int app_id, SteamGameInfo *out_game);
 
@@ -671,6 +704,9 @@ bool find_game_by_appid(int app_id, SteamGameInfo *out_game);
  * scanner.c - Steam Library Auto-Discovery Implementation
  */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 #include "scanner.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -681,6 +717,18 @@ bool find_game_by_appid(int app_id, SteamGameInfo *out_game);
 #include <pwd.h>
 #include <ctype.h>
 #include <sys/stat.h>
+
+static bool case_insensitive_contains(const char *haystack, const char *needle) {
+    if (!haystack || !needle) return false;
+    if (*needle == 0) return true;
+    size_t nlen = strlen(needle);
+    size_t hlen = strlen(haystack);
+    if (hlen < nlen) return false;
+    for (size_t i = 0; i <= hlen - nlen; i++) {
+        if (strncasecmp(&haystack[i], needle, nlen) == 0) return true;
+    }
+    return false;
+}
 
 static bool is_tool_or_runtime(const char *name) {
     if (!name || strlen(name) == 0) return true;
@@ -704,31 +752,119 @@ static bool is_tool_or_runtime(const char *name) {
             strstr(lower, "battleye"));
 }
 
-static void parse_libraryfolders(const char *lib_vdf, char library_paths[16][1024], int *num_libs) {
+static bool parse_acf_file(const char *acf_path, SteamGameInfo *out_game) {
+    FILE *fp = fopen(acf_path, "r");
+    if (!fp) return false;
+
+    int appid = 0;
+    long long last_updated = 0;
+    char name[128] = "";
+    char line[1024];
+
+    while (fgets(line, sizeof(line), fp)) {
+        char *p;
+        if ((p = strcasestr(line, "\\\"appid\\\"")) != NULL) {
+            char *quote1 = strchr(p + 7, '\"');
+            if (quote1) {
+                appid = atoi(quote1 + 1);
+            }
+        } else if ((p = strcasestr(line, "\\\"name\\\"")) != NULL) {
+            char *quote1 = strchr(p + 6, '\"');
+            if (quote1) {
+                quote1++;
+                char *quote2 = strchr(quote1, '\"');
+                if (quote2) {
+                    *quote2 = 0;
+                    snprintf(name, sizeof(name), "%s", quote1);
+                }
+            }
+        } else if ((p = strcasestr(line, "\\\"LastUpdated\\\"")) != NULL) {
+            char *quote1 = strchr(p + 13, '\"');
+            if (quote1) {
+                last_updated = atoll(quote1 + 1);
+            }
+        }
+    }
+    fclose(fp);
+
+    if (appid > 0 && strlen(name) > 0 && !is_tool_or_runtime(name)) {
+        out_game->app_id = appid;
+        out_game->last_updated = last_updated;
+        snprintf(out_game->name, sizeof(out_game->name), "%s", name);
+        return true;
+    }
+    return false;
+}
+
+static void add_library_dir(const char *dir, char library_paths[32][2048], int *num_libs) {
+    if (!dir || *num_libs >= 32) return;
+    if (access(dir, F_OK) != 0) return;
+
+    char resolved[2048];
+    if (realpath(dir, resolved) == NULL) {
+        snprintf(resolved, sizeof(resolved), "%s", dir);
+    }
+
+    for (int i = 0; i < *num_libs; i++) {
+        if (strcmp(library_paths[i], resolved) == 0) return;
+    }
+
+    snprintf(library_paths[*num_libs], sizeof(library_paths[0]), "%s", resolved);
+    (*num_libs)++;
+}
+
+static void parse_libraryfolders(const char *lib_vdf, char library_paths[32][2048], int *num_libs) {
     FILE *fp = fopen(lib_vdf, "r");
     if (!fp) return;
 
-    char line[1024];
+    char line[2048];
     while (fgets(line, sizeof(line), fp)) {
-        char *p_path = strstr(line, "\\"path\\"");
-        if (p_path && *num_libs < 16) {
-            p_path += 6;
-            char *start = strchr(p_path, 34);
-            if (start) {
-                start++;
-                char *end = strchr(start, 34);
-                if (end) {
-                    *end = 0;
-                    char apps_dir[1024];
-                    snprintf(apps_dir, sizeof(apps_dir), "%s/steamapps", start);
+        char *p_path = strcasestr(line, "\\\"path\\\"");
+        if (p_path) {
+            char *quote1 = strchr(p_path + 6, '\"');
+            if (quote1) {
+                quote1++;
+                char *quote2 = strchr(quote1, '\"');
+                if (quote2) {
+                    *quote2 = 0;
+                    char apps_dir[2048];
+                    snprintf(apps_dir, sizeof(apps_dir), "%s/steamapps", quote1);
                     if (access(apps_dir, F_OK) == 0) {
-                        bool exists = false;
-                        for (int i = 0; i < *num_libs; i++) {
-                            if (strcmp(library_paths[i], apps_dir) == 0) { exists = true; break; }
+                        add_library_dir(apps_dir, library_paths, num_libs);
+                    } else {
+                        snprintf(apps_dir, sizeof(apps_dir), "%s/SteamApps", quote1);
+                        if (access(apps_dir, F_OK) == 0) {
+                            add_library_dir(apps_dir, library_paths, num_libs);
+                        } else {
+                            add_library_dir(quote1, library_paths, num_libs);
                         }
-                        if (!exists) {
-                            strncpy(library_paths[*num_libs], apps_dir, sizeof(library_paths[0]) - 1);
-                            (*num_libs)++;
+                    }
+                }
+            }
+        } else {
+            // Check legacy format: "1" "/path/to/library"
+            char *quote1 = strchr(line, '\"');
+            if (quote1) {
+                char *quote2 = strchr(quote1 + 1, '\"');
+                if (quote2) {
+                    char *quote3 = strchr(quote2 + 1, '\"');
+                    if (quote3 && (quote3[1] == '/' || quote3[1] == '~')) {
+                        quote3++;
+                        char *quote4 = strchr(quote3, '\"');
+                        if (quote4) {
+                            *quote4 = 0;
+                            char apps_dir[2048];
+                            snprintf(apps_dir, sizeof(apps_dir), "%s/steamapps", quote3);
+                            if (access(apps_dir, F_OK) == 0) {
+                                add_library_dir(apps_dir, library_paths, num_libs);
+                            } else {
+                                snprintf(apps_dir, sizeof(apps_dir), "%s/SteamApps", quote3);
+                                if (access(apps_dir, F_OK) == 0) {
+                                    add_library_dir(apps_dir, library_paths, num_libs);
+                                } else {
+                                    add_library_dir(quote3, library_paths, num_libs);
+                                }
+                            }
                         }
                     }
                 }
@@ -736,6 +872,57 @@ static void parse_libraryfolders(const char *lib_vdf, char library_paths[16][102
         }
     }
     fclose(fp);
+}
+
+int scan_steam_library_dir(const char *steamapps_dir, SteamGameInfo *out_games, int max_games) {
+    if (!steamapps_dir || !out_games || max_games <= 0) return 0;
+
+    char target_dir[2048];
+    snprintf(target_dir, sizeof(target_dir), "%s", steamapps_dir);
+
+    // If given a library root instead of steamapps, check for steamapps subfolder
+    char sub_apps[2048];
+    snprintf(sub_apps, sizeof(sub_apps), "%s/steamapps", steamapps_dir);
+    if (access(sub_apps, F_OK) == 0) {
+        snprintf(target_dir, sizeof(target_dir), "%s", sub_apps);
+    } else {
+        snprintf(sub_apps, sizeof(sub_apps), "%s/SteamApps", steamapps_dir);
+        if (access(sub_apps, F_OK) == 0) {
+            snprintf(target_dir, sizeof(target_dir), "%s", sub_apps);
+        }
+    }
+
+    char resolved[2048];
+    if (realpath(target_dir, resolved) != NULL) {
+        snprintf(target_dir, sizeof(target_dir), "%s", resolved);
+    }
+
+    DIR *dir = opendir(target_dir);
+    if (!dir) return 0;
+
+    int count = 0;
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (strncmp(entry->d_name, "appmanifest_", 12) == 0 && strstr(entry->d_name, ".acf")) {
+            if (count >= max_games) break;
+
+            char acf_file[4096];
+            snprintf(acf_file, sizeof(acf_file), "%.2000s/%.256s", target_dir, entry->d_name);
+
+            SteamGameInfo game;
+            if (parse_acf_file(acf_file, &game)) {
+                bool exists = false;
+                for (int i = 0; i < count; i++) {
+                    if (out_games[i].app_id == game.app_id) { exists = true; break; }
+                }
+                if (!exists) {
+                    out_games[count++] = game;
+                }
+            }
+        }
+    }
+    closedir(dir);
+    return count;
 }
 
 int scan_all_steam_libraries(SteamGameInfo *out_games, int max_games) {
@@ -748,84 +935,70 @@ int scan_all_steam_libraries(SteamGameInfo *out_games, int max_games) {
     }
     if (!home) return 0;
 
-    char library_paths[16][1024];
+    char library_paths[32][2048];
     int num_libs = 0;
 
-    const char *default_steamapps[] = {
-        "/.local/share/Steam/steamapps",
-        "/.steam/steam/steamapps",
-        "/.var/app/com.valvesoftware.Steam/.steam/steam/steamapps",
-        "/.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps"
+    const char *default_bases[] = {
+        "/.local/share/Steam",
+        "/.steam/steam",
+        "/.steam/root",
+        "/.steam/debian-installation",
+        "/.var/app/com.valvesoftware.Steam/.local/share/Steam",
+        "/.var/app/com.valvesoftware.Steam/.steam/steam",
+        "/.var/app/com.valvesoftware.Steam/data/Steam",
+        "/snap/steam/common/.local/share/Steam",
+        "/snap/steam/common/.steam/steam"
     };
 
-    for (int i = 0; i < 4; i++) {
-        char path[1024];
-        snprintf(path, sizeof(path), "%s%s", home, default_steamapps[i]);
-        if (access(path, F_OK) == 0 && num_libs < 16) {
-            strncpy(library_paths[num_libs++], path, sizeof(library_paths[0]) - 1);
+    for (size_t i = 0; i < sizeof(default_bases) / sizeof(default_bases[0]); i++) {
+        char base[1024];
+        snprintf(base, sizeof(base), "%s%s", home, default_bases[i]);
 
-            char lib_vdf[1024];
-            snprintf(lib_vdf, sizeof(lib_vdf), "%s/libraryfolders.vdf", path);
+        char path[2048];
+        snprintf(path, sizeof(path), "%s/steamapps", base);
+        if (access(path, F_OK) == 0) {
+            add_library_dir(path, library_paths, &num_libs);
+        }
+
+        snprintf(path, sizeof(path), "%s/SteamApps", base);
+        if (access(path, F_OK) == 0) {
+            add_library_dir(path, library_paths, &num_libs);
+        }
+
+        char lib_vdf[2048];
+        snprintf(lib_vdf, sizeof(lib_vdf), "%s/config/libraryfolders.vdf", base);
+        if (access(lib_vdf, F_OK) == 0) {
+            parse_libraryfolders(lib_vdf, library_paths, &num_libs);
+        }
+
+        snprintf(lib_vdf, sizeof(lib_vdf), "%s/steamapps/libraryfolders.vdf", base);
+        if (access(lib_vdf, F_OK) == 0) {
+            parse_libraryfolders(lib_vdf, library_paths, &num_libs);
+        }
+
+        snprintf(lib_vdf, sizeof(lib_vdf), "%s/SteamApps/libraryfolders.vdf", base);
+        if (access(lib_vdf, F_OK) == 0) {
             parse_libraryfolders(lib_vdf, library_paths, &num_libs);
         }
     }
 
     int count = 0;
-
     for (int lib = 0; lib < num_libs; lib++) {
-        DIR *dir = opendir(library_paths[lib]);
-        if (!dir) continue;
-
-        struct dirent *entry;
-        while ((entry = readdir(dir)) != NULL) {
-            if (strncmp(entry->d_name, "appmanifest_", 12) == 0 && strstr(entry->d_name, ".acf")) {
-                if (count >= max_games) break;
-
-                char acf_file[2048];
-                snprintf(acf_file, sizeof(acf_file), "%s/%s", library_paths[lib], entry->d_name);
-
-                FILE *fp = fopen(acf_file, "r");
-                if (!fp) continue;
-
-                int appid = 0;
-                long long last_updated = 0;
-                char name[128] = "";
-                char line[512];
-
-                while (fgets(line, sizeof(line), fp)) {
-                    if (strstr(line, "\\"appid\\"")) {
-                        char *val = strchr(line + 7, 34);
-                        if (val) appid = atoi(val + 1);
-                    } else if (strstr(line, "\\"name\\"")) {
-                        char *val = strchr(line + 6, 34);
-                        if (val) {
-                            val++;
-                            char *end = strchr(val, 34);
-                            if (end) *end = 0;
-                            strncpy(name, val, sizeof(name) - 1);
-                        }
-                    } else if (strstr(line, "\\"LastUpdated\\"")) {
-                        char *val = strchr(line + 13, 34);
-                        if (val) last_updated = atoll(val + 1);
-                    }
-                }
-                fclose(fp);
-
-                if (appid > 0 && strlen(name) > 0 && !is_tool_or_runtime(name)) {
-                    bool exists = false;
-                    for (int i = 0; i < count; i++) {
-                        if (out_games[i].app_id == appid) { exists = true; break; }
-                    }
-                    if (!exists) {
-                        out_games[count].app_id = appid;
-                        out_games[count].last_updated = last_updated;
-                        strncpy(out_games[count].name, name, sizeof(out_games[count].name) - 1);
-                        count++;
-                    }
+        SteamGameInfo dir_games[128];
+        int dir_count = scan_steam_library_dir(library_paths[lib], dir_games, 128);
+        for (int i = 0; i < dir_count; i++) {
+            bool exists = false;
+            for (int j = 0; j < count; j++) {
+                if (out_games[j].app_id == dir_games[i].app_id) {
+                    exists = true;
+                    break;
                 }
             }
+            if (!exists && count < max_games) {
+                out_games[count++] = dir_games[i];
+            }
         }
-        closedir(dir);
+        if (count >= max_games) break;
     }
 
     // Sort games alphabetically by name
@@ -848,7 +1021,7 @@ bool find_game_by_name(const char *search_query, SteamGameInfo *out_game) {
     int count = scan_all_steam_libraries(games, 128);
 
     for (int i = 0; i < count; i++) {
-        if (strcasestr(games[i].name, search_query)) {
+        if (case_insensitive_contains(games[i].name, search_query)) {
             *out_game = games[i];
             return true;
         }
@@ -908,10 +1081,14 @@ bool restore_vdf_backup(const char *vdf_path, const char *backup_filename_or_lat
  * backup.c - VDF Backup & Rollback Implementation
  */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 #include "backup.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <time.h>
 #include <dirent.h>
 #include <sys/stat.h>
@@ -923,7 +1100,7 @@ bool create_vdf_backup(const char *vdf_path, char *out_backup_path, size_t max_l
     time_t now = time(NULL);
     struct tm *t = localtime(&now);
 
-    char backup_file[1024];
+    char backup_file[2048];
     snprintf(backup_file, sizeof(backup_file), "%s.bak.%04d%02d%02d_%02d%02d%02d",
              vdf_path,
              t->tm_year + 1900, t->tm_mon + 1, t->tm_mday,
@@ -945,8 +1122,7 @@ bool create_vdf_backup(const char *vdf_path, char *out_backup_path, size_t max_l
     fclose(dst);
 
     if (out_backup_path && max_len > 0) {
-        strncpy(out_backup_path, backup_file, max_len - 1);
-        out_backup_path[max_len - 1] = 0;
+        snprintf(out_backup_path, max_len, "%s", backup_file);
     }
 
     return true;
@@ -956,7 +1132,7 @@ int list_vdf_backups(const char *vdf_path) {
     if (!vdf_path || strlen(vdf_path) == 0) return 0;
 
     char dir_copy[1024];
-    strncpy(dir_copy, vdf_path, sizeof(dir_copy) - 1);
+    snprintf(dir_copy, sizeof(dir_copy), "%s", vdf_path);
     char *dir_path = dirname(dir_copy);
 
     DIR *dir = opendir(dir_path);
@@ -993,11 +1169,11 @@ int list_vdf_backups(const char *vdf_path) {
 bool restore_vdf_backup(const char *vdf_path, const char *backup_filename_or_latest) {
     if (!vdf_path) return false;
 
-    char restore_src[1024] = "";
+    char restore_src[2048] = "";
 
     if (strcmp(backup_filename_or_latest, "latest") == 0) {
         char dir_copy[1024];
-        strncpy(dir_copy, vdf_path, sizeof(dir_copy) - 1);
+        snprintf(dir_copy, sizeof(dir_copy), "%s", vdf_path);
         char *dir_path = dirname(dir_copy);
 
         DIR *dir = opendir(dir_path);
@@ -1008,7 +1184,7 @@ bool restore_vdf_backup(const char *vdf_path, const char *backup_filename_or_lat
         while ((entry = readdir(dir)) != NULL) {
             if (strstr(entry->d_name, "localconfig.vdf.bak")) {
                 if (strcmp(entry->d_name, latest_name) > 0) {
-                    strncpy(latest_name, entry->d_name, sizeof(latest_name) - 1);
+                    snprintf(latest_name, sizeof(latest_name), "%s", entry->d_name);
                 }
             }
         }
@@ -1018,10 +1194,10 @@ bool restore_vdf_backup(const char *vdf_path, const char *backup_filename_or_lat
         snprintf(restore_src, sizeof(restore_src), "%s/%s", dir_path, latest_name);
     } else {
         if (backup_filename_or_latest[0] == '/') {
-            strncpy(restore_src, backup_filename_or_latest, sizeof(restore_src) - 1);
+            snprintf(restore_src, sizeof(restore_src), "%s", backup_filename_or_latest);
         } else {
             char dir_copy[1024];
-            strncpy(dir_copy, vdf_path, sizeof(dir_copy) - 1);
+            snprintf(dir_copy, sizeof(dir_copy), "%s", vdf_path);
             snprintf(restore_src, sizeof(restore_src), "%s/%s", dirname(dir_copy), backup_filename_or_latest);
         }
     }
@@ -1058,6 +1234,8 @@ bool restore_vdf_backup(const char *vdf_path, const char *backup_filename_or_lat
 #define LAUNCHER_H
 
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdlib.h>
 
 bool detect_steam_client(char *out_type, size_t max_len);
 bool launch_steam_game_uri(int app_id);
@@ -1073,6 +1251,9 @@ bool launch_steam_game_uri(int app_id);
  * launcher.c - Direct Steam URI Game Launcher Implementation
  */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 #include "launcher.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -1082,11 +1263,11 @@ bool launch_steam_game_uri(int app_id);
 
 bool detect_steam_client(char *out_type, size_t max_len) {
     if (system("command -v steam > /dev/null 2>&1") == 0) {
-        if (out_type && max_len > 0) strncpy(out_type, "Native Steam (system PATH)", max_len - 1);
+        if (out_type && max_len > 0) snprintf(out_type, max_len, "Native Steam (system PATH)");
         return true;
     }
     if (system("command -v flatpak > /dev/null 2>&1 && flatpak list | grep -q com.valvesoftware.Steam") == 0) {
-        if (out_type && max_len > 0) strncpy(out_type, "Flatpak Steam", max_len - 1);
+        if (out_type && max_len > 0) snprintf(out_type, max_len, "Flatpak Steam");
         return true;
     }
     return false;
@@ -1143,6 +1324,9 @@ int run_interactive_tui(ProtonFlag *flags, int num_flags, int app_id, const char
  * tui.c - Zero-dependency ANSI Terminal UI Implementation
  */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 #include "tui.h"
 #include "presets.h"
 #include "scanner.h"
@@ -1202,9 +1386,9 @@ int run_interactive_tui(ProtonFlag *flags, int num_flags, int app_id, const char
     int selected_idx = 0;
     int current_appid = app_id;
     char current_game[128];
-    strncpy(current_game, game_name, sizeof(current_game) - 1);
+    snprintf(current_game, sizeof(current_game), "%s", game_name);
 
-    char status_msg[128] = "Use [UP/DOWN] to navigate, [SPACE] to toggle, [P] for presets, [S] to save";
+    char status_msg[512] = "Use [UP/DOWN] to navigate, [SPACE] to toggle, [P] for presets, [S] to save";
 
     while (1) {
         // Clear screen
@@ -1227,15 +1411,24 @@ int run_interactive_tui(ProtonFlag *flags, int num_flags, int app_id, const char
         }
         printf("--------------------------------------------------------------------------------\\n");
 
-        // Checklist items
-        for (int i = 0; i < num_flags; i++) {
+        // Checklist items (windowed scroll for 98 flags)
+        int page_size = 14;
+        int start_idx = selected_idx - (page_size / 2);
+        if (start_idx < 0) start_idx = 0;
+        if (start_idx + page_size > num_flags) start_idx = num_flags - page_size;
+        if (start_idx < 0) start_idx = 0;
+        int end_idx = start_idx + page_size;
+        if (end_idx > num_flags) end_idx = num_flags;
+
+        printf(" Flags %d-%d of %d (Use UP/DOWN or J/K to scroll):\\n", start_idx + 1, end_idx, num_flags);
+        for (int i = start_idx; i < end_idx; i++) {
             bool is_sel = (i == selected_idx);
             const char *box = flags[i].enabled ? "\\033[1;32m[X]\\033[0m" : "\\033[1;30m[ ]\\033[0m";
             if (is_sel) {
-                printf("\\033[1;37;44m > %s %-32s (%s)\\033[0m\\n",
+                printf("\\033[1;37;44m > %s %-36.36s (%s)\\033[0m\\n",
                        flags[i].enabled ? "[X]" : "[ ]", flags[i].name, flags[i].env_var);
             } else {
-                printf("   %s %-32s \\033[2m%s\\033[0m\\n",
+                printf("   %s %-36.36s \\033[2m%s\\033[0m\\n",
                        box, flags[i].name, flags[i].env_var);
             }
         }
@@ -1274,7 +1467,7 @@ int run_interactive_tui(ProtonFlag *flags, int num_flags, int app_id, const char
             break;
         } else if (c == 'k' || c == 'w') {
             if (selected_idx > 0) selected_idx--;
-        } else if (c == 'j' || c == 's' && c != 'S') {
+        } else if (c == 'j' || (c == 's' && c != 'S')) {
             if (selected_idx < num_flags - 1) selected_idx++;
         } else if (c == ' ') {
             flags[selected_idx].enabled = !flags[selected_idx].enabled;
@@ -1301,7 +1494,7 @@ int run_interactive_tui(ProtonFlag *flags, int num_flags, int app_id, const char
                 static int g_idx = 0;
                 g_idx = (g_idx + 1) % count;
                 current_appid = scanned[g_idx].app_id;
-                strncpy(current_game, scanned[g_idx].name, sizeof(current_game) - 1);
+                snprintf(current_game, sizeof(current_game), "%s", scanned[g_idx].name);
                 snprintf(status_msg, sizeof(status_msg), "Selected '%s' (AppID %d)", current_game, current_appid);
             }
         } else if (c == 'S') {
@@ -1334,11 +1527,15 @@ int run_interactive_tui(ProtonFlag *flags, int num_flags, int app_id, const char
  * Portable C code to modify Steam game launch options efficiently
  */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 #include <gtk/gtk.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <unistd.h>
 #include "vdf_parser.h"
 #include "conflicts.h"
 #include "presets.h"
@@ -1350,21 +1547,11 @@ int run_interactive_tui(ProtonFlag *flags, int num_flags, int app_id, const char
 #define MAX_GAME_NAME 256
 
 static ProtonFlag g_flags[] = {
-    {"PROTON_USE_WINED3D", "PROTON_USE_WINED3D=1", false, 0, false},
-    {"PROTON_USE_NTSYNC", "PROTON_USE_NTSYNC=1", false, 0, false},
-    {"DISABLE_SHADER_CACHE", "DISABLE_SHADER_CACHE=1", false, 0, false},
-    {"gamemoderun (GameMode)", "gamemoderun", true, 2, false},
-    {"game-performance (CachyOS)", "game-performance", true, 2, false},
-    {"lsvk (VKD3D Ray Tracing)", "VKD3D_CONFIG=dxr11,dxr", false, 0, false},
-    {"mangohud (FPS Overlay)", "mangohud", true, 1, false},
-    {"ENABLE_NVAPI (DLSS/Reflex)", "PROTON_ENABLE_NVAPI=1", false, 0, false},
-    {"lsfg-vk (Lossless Scaling)", "ENABLE_LSFG=1 LSFGVK_MULTIPLIER=2", false, 0, false},
-    {"Gamescope Compositor", "gamescope -w 1920 -h 1080 -r 144 -f --", true, 3, false},
-    {"PROTON_LOG (Debugging)", "PROTON_LOG=1", false, 0, false}
+${cFlagsArray}
 };
 
-static const int NUM_FLAGS = sizeof(g_flags) / sizeof(g_flags[0]);
-static GtkWidget *g_check_btns[NUM_FLAGS];
+#define NUM_FLAGS ((int)(sizeof(g_flags) / sizeof(g_flags[0])))
+static GtkWidget *g_check_btns[256];
 
 static GtkWidget *g_preview_entry;
 static GtkWidget *g_game_combo;
@@ -1453,17 +1640,145 @@ static void on_preset_changed(GtkComboBoxText *combo, gpointer user_data) {
     }
 }
 
+static void on_game_changed(GtkComboBoxText *combo, gpointer user_data);
+
+static void refresh_game_combo(void) {
+    if (!g_game_combo) return;
+
+    g_signal_handlers_block_by_func(g_game_combo, G_CALLBACK(on_game_changed), NULL);
+    gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(g_game_combo));
+
+    int active_idx = 0;
+    for (int i = 0; i < g_num_games; i++) {
+        char item_text[512];
+        snprintf(item_text, sizeof(item_text), "%.200s (AppID: %d)", g_library_games[i].name, g_library_games[i].app_id);
+        gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(g_game_combo), item_text);
+
+        if (g_library_games[i].app_id == g_current_appid) {
+            active_idx = i;
+        }
+    }
+
+    gtk_combo_box_set_active(GTK_COMBO_BOX(g_game_combo), active_idx);
+    g_signal_handlers_unblock_by_func(g_game_combo, G_CALLBACK(on_game_changed), NULL);
+
+    if (g_game_info_lbl) {
+        char info_str[512];
+        snprintf(info_str, sizeof(info_str), "Target: <b>%.200s</b> (AppID: <b>%d</b>)", g_current_gamename, g_current_appid);
+        gtk_label_set_markup(GTK_LABEL(g_game_info_lbl), info_str);
+    }
+}
+
 static void on_game_changed(GtkComboBoxText *combo, gpointer user_data) {
     (void)user_data;
     gint idx = gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
     if (idx >= 0 && idx < g_num_games) {
         g_current_appid = g_library_games[idx].app_id;
-        strncpy(g_current_gamename, g_library_games[idx].name, sizeof(g_current_gamename) - 1);
+        snprintf(g_current_gamename, sizeof(g_current_gamename), "%.127s", g_library_games[idx].name);
 
-        char info_str[256];
-        snprintf(info_str, sizeof(info_str), "Target Game: <b>%s</b> | AppID: <b>%d</b>", g_current_gamename, g_current_appid);
-        gtk_label_set_markup(GTK_LABEL(g_game_info_lbl), info_str);
+        if (g_game_info_lbl) {
+            char info_str[512];
+            snprintf(info_str, sizeof(info_str), "Target: <b>%.200s</b> (AppID: <b>%d</b>)", g_current_gamename, g_current_appid);
+            gtk_label_set_markup(GTK_LABEL(g_game_info_lbl), info_str);
+        }
     }
+}
+
+static void on_scan_libraries_clicked(GtkWidget *btn, gpointer user_data) {
+    (void)btn;
+    (void)user_data;
+
+    SteamGameInfo scanned[128];
+    int scanned_cnt = scan_all_steam_libraries(scanned, 128);
+    if (scanned_cnt > 0) {
+        g_num_games = 0; // Clear previous list to prevent duplicates on rescan
+        bool has_selected = false;
+        for (int i = 0; i < scanned_cnt && g_num_games < 128; i++) {
+            bool exists = false;
+            for (int j = 0; j < g_num_games; j++) {
+                if (g_library_games[j].app_id == scanned[i].app_id) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists) {
+                g_library_games[g_num_games++] = scanned[i];
+            }
+            if (scanned[i].app_id == g_current_appid) {
+                has_selected = true;
+            }
+        }
+        if (!has_selected && g_num_games < 128 && g_current_appid > 0) {
+            g_library_games[g_num_games].app_id = g_current_appid;
+            snprintf(g_library_games[g_num_games].name, sizeof(g_library_games[g_num_games].name), "%.127s", g_current_gamename);
+            g_library_games[g_num_games].last_updated = 0;
+            g_num_games++;
+        }
+
+        refresh_game_combo();
+
+        char msg[256];
+        snprintf(msg, sizeof(msg), "Successfully discovered %d unique game(s) from your Steam library!", g_num_games);
+        GtkWidget *dialog = gtk_message_dialog_new(NULL, GTK_DIALOG_MODAL, GTK_MESSAGE_INFO,
+                                                   GTK_BUTTONS_OK, "%s", msg);
+        gtk_dialog_run(GTK_DIALOG(dialog));
+        gtk_widget_destroy(dialog);
+    } else {
+        GtkWidget *dialog = gtk_message_dialog_new(NULL, GTK_DIALOG_MODAL, GTK_MESSAGE_WARNING,
+                                                   GTK_BUTTONS_OK,
+                                                   "No Steam games found automatically in standard locations.\\n\\nYou can use the '📁 Add Folder' button to browse directly to your steamapps or SteamLibrary directory!");
+        gtk_dialog_run(GTK_DIALOG(dialog));
+        gtk_widget_destroy(dialog);
+    }
+}
+
+static void on_add_folder_clicked(GtkWidget *btn, gpointer user_data) {
+    (void)btn;
+    (void)user_data;
+
+    GtkWidget *dialog = gtk_file_chooser_dialog_new("Select Steam Library Folder (steamapps or library root)",
+                                                    NULL,
+                                                    GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER,
+                                                    "_Cancel", GTK_RESPONSE_CANCEL,
+                                                    "_Open", GTK_RESPONSE_ACCEPT,
+                                                    NULL);
+
+    if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
+        char *folder = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+        if (folder) {
+            SteamGameInfo scanned[128];
+            int count = scan_steam_library_dir(folder, scanned, 128);
+            if (count > 0) {
+                int added_new = 0;
+                for (int i = 0; i < count && g_num_games < 128; i++) {
+                    bool exists = false;
+                    for (int j = 0; j < g_num_games; j++) {
+                        if (g_library_games[j].app_id == scanned[i].app_id) { exists = true; break; }
+                    }
+                    if (!exists) {
+                        g_library_games[g_num_games++] = scanned[i];
+                        added_new++;
+                    }
+                }
+                refresh_game_combo();
+
+                char msg[256];
+                snprintf(msg, sizeof(msg), "Found %d game(s) in folder (%d newly added)! Total: %d games", count, added_new, g_num_games);
+                GtkWidget *infodlg = gtk_message_dialog_new(NULL, GTK_DIALOG_MODAL, GTK_MESSAGE_INFO,
+                                                           GTK_BUTTONS_OK, "%s", msg);
+                gtk_dialog_run(GTK_DIALOG(infodlg));
+                gtk_widget_destroy(infodlg);
+            } else {
+                GtkWidget *warndlg = gtk_message_dialog_new(NULL, GTK_DIALOG_MODAL, GTK_MESSAGE_WARNING,
+                                                           GTK_BUTTONS_OK,
+                                                           "No appmanifest_*.acf game files found in:\\n%s", folder);
+                gtk_dialog_run(GTK_DIALOG(warndlg));
+                gtk_widget_destroy(warndlg);
+            }
+            g_free(folder);
+        }
+    }
+    gtk_widget_destroy(dialog);
 }
 
 static void on_launch_clicked(GtkWidget *btn, gpointer user_data) {
@@ -1575,15 +1890,14 @@ int main(int argc, char *argv[]) {
         }
         if (!has_selected && g_num_games < 128) {
             g_library_games[g_num_games].app_id = g_current_appid;
-            strncpy(g_library_games[g_num_games].name, g_current_gamename, sizeof(g_library_games[g_num_games].name) - 1);
-            g_library_games[g_num_games].name[sizeof(g_library_games[g_num_games].name) - 1] = 0;
+            snprintf(g_library_games[g_num_games].name, sizeof(g_library_games[g_num_games].name), "%.127s", g_current_gamename);
             g_num_games++;
         }
     }
 
     GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(window), "Linux Steam Proton Launch Options Manager (C)");
-    gtk_window_set_default_size(GTK_WINDOW(window), 760, 620);
+    gtk_window_set_default_size(GTK_WINDOW(window), 840, 720);
     gtk_container_set_border_width(GTK_CONTAINER(window), 16);
 
     setup_taskbar_icon(window);
@@ -1625,8 +1939,8 @@ int main(int argc, char *argv[]) {
     int active_idx = 0;
 
     for (int i = 0; i < g_num_games; i++) {
-        char item_text[256];
-        snprintf(item_text, sizeof(item_text), "%s (AppID: %d)", g_library_games[i].name, g_library_games[i].app_id);
+        char item_text[512];
+        snprintf(item_text, sizeof(item_text), "%.200s (AppID: %d)", g_library_games[i].name, g_library_games[i].app_id);
         gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(g_game_combo), item_text);
 
         if (g_library_games[i].app_id == g_current_appid) {
@@ -1638,22 +1952,43 @@ int main(int argc, char *argv[]) {
     g_signal_connect(g_game_combo, "changed", G_CALLBACK(on_game_changed), NULL);
     gtk_box_pack_start(GTK_BOX(game_box), g_game_combo, TRUE, TRUE, 0);
 
+    GtkWidget *btn_scan_lib = gtk_button_new_with_label("🔄 Scan Library");
+    g_signal_connect(btn_scan_lib, "clicked", G_CALLBACK(on_scan_libraries_clicked), NULL);
+    gtk_box_pack_start(GTK_BOX(game_box), btn_scan_lib, FALSE, FALSE, 0);
+
+    GtkWidget *btn_add_folder = gtk_button_new_with_label("📁 Add Folder");
+    g_signal_connect(btn_add_folder, "clicked", G_CALLBACK(on_add_folder_clicked), NULL);
+    gtk_box_pack_start(GTK_BOX(game_box), btn_add_folder, FALSE, FALSE, 0);
+
+    // Game Info & Status Row
+    g_game_info_lbl = gtk_label_new(NULL);
+    gtk_label_set_xalign(GTK_LABEL(g_game_info_lbl), 0.0);
+    char init_info_str[512];
+    snprintf(init_info_str, sizeof(init_info_str), "Target: <b>%.200s</b> (AppID: <b>%d</b>)", g_current_gamename, g_current_appid);
+    gtk_label_set_markup(GTK_LABEL(g_game_info_lbl), init_info_str);
+    gtk_box_pack_start(GTK_BOX(main_vbox), g_game_info_lbl, FALSE, FALSE, 0);
+
     // Conflict Status Banner
     g_conflict_lbl = gtk_label_new(NULL);
     update_conflict_status();
     gtk_box_pack_start(GTK_BOX(main_vbox), g_conflict_lbl, FALSE, FALSE, 0);
 
-    // Frame for Flags
-    GtkWidget *frame = gtk_frame_new("Proton Flags & Performance Wrappers");
+    // Frame for Flags with Scrolled Window
+    GtkWidget *frame = gtk_frame_new("Proton Flags & Performance Wrappers (98 Flags)");
     gtk_box_pack_start(GTK_BOX(main_vbox), frame, TRUE, TRUE, 0);
 
-    GtkWidget *grid = gtk_grid_new();
-    gtk_grid_set_column_spacing(GTK_GRID(grid), 20);
-    gtk_grid_set_row_spacing(GTK_GRID(grid), 8);
-    gtk_container_set_border_width(GTK_CONTAINER(grid), 12);
-    gtk_container_add(GTK_CONTAINER(frame), grid);
+    GtkWidget *scrolled = gtk_scrolled_window_new(NULL, NULL);
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    gtk_scrolled_window_set_min_content_height(GTK_SCROLLED_WINDOW(scrolled), 320);
+    gtk_container_add(GTK_CONTAINER(frame), scrolled);
 
-    for (int i = 0; i < NUM_FLAGS; i++) {
+    GtkWidget *grid = gtk_grid_new();
+    gtk_grid_set_column_spacing(GTK_GRID(grid), 16);
+    gtk_grid_set_row_spacing(GTK_GRID(grid), 6);
+    gtk_container_set_border_width(GTK_CONTAINER(grid), 10);
+    gtk_container_add(GTK_CONTAINER(scrolled), grid);
+
+    for (int i = 0; i < (int)NUM_FLAGS; i++) {
         g_check_btns[i] = gtk_check_button_new_with_label(g_flags[i].name);
 
         if (strstr(g_flags[i].env_var, "PROTON_ENABLE_NVAPI") || strstr(g_flags[i].env_var, "gamemoderun")) {
@@ -1742,6 +2077,9 @@ bool find_steam_vdf_path(char *out_path, size_t max_len);
  * vdf_parser.c - Pure C Valve Data Format parser implementation
  */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 #include "vdf_parser.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -1761,11 +2099,16 @@ bool find_steam_vdf_path(char *out_path, size_t max_len) {
     const char *userdata_roots[] = {
         "/.local/share/Steam/userdata",
         "/.steam/steam/userdata",
+        "/.steam/root/userdata",
+        "/.steam/debian-installation/userdata",
+        "/.var/app/com.valvesoftware.Steam/.local/share/Steam/userdata",
         "/.var/app/com.valvesoftware.Steam/.steam/steam/userdata",
-        "/.var/app/com.valvesoftware.Steam/.local/share/Steam/userdata"
+        "/.var/app/com.valvesoftware.Steam/data/Steam/userdata",
+        "/snap/steam/common/.local/share/Steam/userdata",
+        "/snap/steam/common/.steam/steam/userdata"
     };
 
-    for (int r = 0; r < 4; r++) {
+    for (size_t r = 0; r < sizeof(userdata_roots) / sizeof(userdata_roots[0]); r++) {
         char uroot[1024];
         snprintf(uroot, sizeof(uroot), "%s%s", home, userdata_roots[r]);
         DIR *dir = opendir(uroot);
@@ -1774,11 +2117,10 @@ bool find_steam_vdf_path(char *out_path, size_t max_len) {
         struct dirent *entry;
         while ((entry = readdir(dir)) != NULL) {
             if (entry->d_name[0] == '.') continue;
-            char vdf_candidate[1024];
+            char vdf_candidate[2048];
             snprintf(vdf_candidate, sizeof(vdf_candidate), "%s/%s/config/localconfig.vdf", uroot, entry->d_name);
             if (access(vdf_candidate, F_OK) == 0) {
-                strncpy(out_path, vdf_candidate, max_len - 1);
-                out_path[max_len - 1] = 0;
+                snprintf(out_path, max_len, "%s", vdf_candidate);
                 closedir(dir);
                 return true;
             }
@@ -1891,7 +2233,7 @@ bool vdf_update_launch_options(const char *vdf_filepath, int app_id, const char 
       description: 'Makefile building both zero-dependency proton_cli and optional GTK3 proton_mgr',
       content: `# Makefile for Proton Launch Options Manager
 CC ?= gcc
-CFLAGS = -Wall -Wextra -std=c99 -O2
+CFLAGS = -Wall -Wextra -std=c99 -D_GNU_SOURCE -O2
 
 # Core CLI/TUI objects (zero external dependencies, pure libc)
 CLI_SRCS = cli_main.c vdf_parser.c conflicts.c presets.c scanner.c backup.c launcher.c tui.c
@@ -1934,9 +2276,11 @@ clean:
 install: $(CLI_TARGET)
 	install -d $(DESTDIR)/usr/local/bin
 	install -m 755 $(CLI_TARGET) $(DESTDIR)/usr/local/bin/
-	@if [ -f $(GUI_TARGET) ]; then \\
-		install -m 755 $(GUI_TARGET) $(DESTDIR)/usr/local/bin/; \\
+	@if [ -f $(GUI_TARGET) ]; then \
+		install -m 755 $(GUI_TARGET) $(DESTDIR)/usr/local/bin/; \
 	fi
+	install -d $(DESTDIR)/usr/local/share/man/man1
+	install -m 644 proton_cli.1 $(DESTDIR)/usr/local/share/man/man1/
 
 .PHONY: all clean install gui_check
 `
@@ -1949,6 +2293,7 @@ install: $(CLI_TARGET)
 project(ProtonManager C)
 
 set(CMAKE_C_STANDARD 99)
+add_definitions(-D_GNU_SOURCE)
 
 # 1. Standalone CLI & TUI Target (Pure libc, Zero Dependencies)
 add_executable(proton_cli 
@@ -1981,6 +2326,168 @@ if (PKG_CONFIG_FOUND)
         target_compile_options(proton_mgr PRIVATE \${GTK3_CFLAGS_OTHER})
     endif()
 endif()
+
+# 3. Installation Rules
+install(TARGETS proton_cli DESTINATION bin)
+if (TARGET proton_mgr)
+    install(TARGETS proton_mgr DESTINATION bin)
+endif()
+install(FILES proton_cli.1 DESTINATION share/man/man1 OPTIONAL)
+`
+    },
+    {
+      filename: 'proton_cli.1',
+      language: 'groff',
+      description: 'Standard UNIX section 1 manual page for proton_cli (view with: man ./proton_cli.1)',
+      content: `.\\" Manual page for proton_cli
+.\\" Generated for Proton Launch Options Manager
+.TH PROTON_CLI 1 "August 2026" "Proton Launch Manager 1.0" "User Commands"
+.SH NAME
+proton_cli \\- manage, optimize, and launch Steam Proton games with custom environment variables and performance wrappers
+.SH SYNOPSIS
+.B proton_cli
+[\\fIOPTIONS\\fR]
+.br
+.B proton_cli
+[\\fB\\-i\\fR | \\fB\\-\\-interactive\\fR]
+.br
+.B proton_cli
+[\\fB\\-g\\fR \\fIGAME\\fR] [\\fB\\-p\\fR \\fIPRESET\\fR] [\\fB\\-c\\fR] [\\fB\\-\\-auto-fix\\fR] [\\fB\\-w\\fR] [\\fB\\-x\\fR]
+.SH DESCRIPTION
+.B proton_cli
+is a lightweight, 100% offline, zero-dependency C99 command-line interface and terminal user interface (TUI) for managing Linux Steam Proton launch options.
+It parses and updates Steam's binary-adjacent \\fBlocalconfig.vdf\\fR configuration file, scans mounted Steam libraries for installed games, checks for conflicting or deprecated Proton environment variables, and launches games directly using the Steam URI protocol (\\fBsteam://rungameid/<appid>\\fR).
+
+When invoked without arguments, \\fBproton_cli\\fR automatically launches into its interactive ANSI Terminal UI mode.
+
+.SH OPTIONS
+.SS "Mode & UI Options"
+.TP
+.BR \\-i ", " \\-\\-interactive
+Start the interactive ANSI Terminal User Interface (TUI). Features live launch command previews, a scrollable flag checklist with conflict indicators, and single-key preset selectors.
+.TP
+.BR \\-h ", " \\-\\-help
+Display a summary of command-line options and exit.
+
+.SS "Game & Library Auto-Discovery"
+.TP
+.BR \\-l ", " \\-\\-list-games
+Scan all Steam library folders (via \\fIlibraryfolders.vdf\\fR and \\fIappmanifest_*.acf\\fR) across internal and external mount drives, and display a formatted table of installed games with their respective Steam AppIDs.
+.TP
+.BI \\-g " GAME" ", " \\-\\-game= GAME
+Select target game by its numerical Steam AppID (e.g. \\fB1091500\\fR) or by case-insensitive title search (e.g. \\fB"Cyberpunk 2077"\\fR).
+
+.SS "Preset & Performance Profiles"
+.TP
+.BI \\-p " PRESET" ", " \\-\\-preset= PRESET
+Apply a preconfigured Proton optimization profile to the active launch command.
+Available preset identifiers:
+.RS
+.IP \\(bu 2
+\\fBdeck\\fR \\- Steam Deck Optimal (Gamescope micro-compositor, MangoHud overlay, FSR upscaling, Mesa Anti-Lag)
+.IP \\(bu 2
+\\fBesports\\fR \\- Ultra-Low Latency & High FPS (NTSYNC, Reflex, GameMode, Anti-Lag, Vulkan Reflex)
+.IP \\(bu 2
+\\fBrt\\fR \\- Ray Tracing & DLSS / OptiScaler (VKD3D DXR11/DXR, NVAPI, DLSS upgrade, OptiScaler)
+.IP \\(bu 2
+\\fBretro\\fR \\- Retro & Legacy DirectX (WineD3D OpenGL, DXVK Sarek legacy GPU async, Integer Scaling)
+.IP \\(bu 2
+\\fBlsfg\\fR \\- Lossless Scaling Frame Generation (lsfg-vk Vulkan layer 3x frame multiplier)
+.IP \\(bu 2
+\\fBbattery\\fR \\- Power Saver & Framerate Cap (Gamescope 45Hz/45FPS cap, TDP reduction)
+.RE
+.TP
+.B \\-\\-list-presets
+Print all available built-in performance presets along with their descriptions and active flag sets.
+
+.SS "Conflict Detection & Resolution"
+.TP
+.BR \\-c ", " \\-\\-check-conflicts
+Analyze the active combination of Proton flags and wrappers for known incompatibilities (such as WineD3D vs DXVK/VKD3D, duplicate CPU schedulers, or conflicting low-latency layers).
+.TP
+.B \\-\\-auto-fix
+Automatically resolve and disable conflicting flags using safe heuristic recommendations.
+
+.SS "VDF Management & Game Execution"
+.TP
+.BR \\-w ", " \\-\\-write-vdf
+Safely write the generated launch options into Steam's \\fBlocalconfig.vdf\\fR for the selected game. An automatic backup is created before any file modification.
+.TP
+.BR \\-x ", " \\-\\-launch
+Execute the target game immediately via Steam URI protocol (\\fBsteam://rungameid/<appid>\\fR). Supports both Native Steam and Flatpak installations.
+.TP
+.B \\-\\-backup
+Create an immediate timestamped backup of the current Steam \\fBlocalconfig.vdf\\fR.
+.TP
+.B \\-\\-list-backups
+List all existing timestamped \\fBlocalconfig.vdf.bak.*\\fR files.
+.TP
+.BI \\-\\-restore= FILE
+Restore Steam configuration from a specific backup file path, or specify \\fBlatest\\fR to revert to the most recent automatic backup.
+
+.SH INTERACTIVE TUI CONTROLS
+When running in TUI mode (\\fB-i\\fR or no arguments), the following hotkeys are available:
+.TP
+.B [Up] / [Down] / [j] / [k]
+Navigate through the Proton environment variable checklist.
+.TP
+.B [Space] / [Enter]
+Toggle the selected flag on or off.
+.TP
+.B [P] / [p]
+Cycle through built-in performance presets.
+.TP
+.B [C] / [c]
+Run conflict analysis on active flags.
+.TP
+.B [W] / [w]
+Save current launch command to Steam \\fBlocalconfig.vdf\\fR.
+.TP
+.B [X] / [x]
+Launch the selected game via Steam.
+.TP
+.B [R] / [r]
+Reset all flags to defaults.
+.TP
+.B [Q] / [q]
+Exit the TUI.
+
+.SH ENVIRONMENT & FILES
+.TP
+.I ~/.local/share/Steam/userdata/<user_id>/config/localconfig.vdf
+Primary Steam user configuration file storing game launch options.
+.TP
+.I ~/.steam/steam/steamapps/libraryfolders.vdf
+Steam library index containing paths to all external and internal game install directories.
+.TP
+.I ~/.local/share/Steam/userdata/<user_id>/config/localconfig.vdf.bak.*
+Timestamped backups created automatically before write operations.
+
+.SH EXAMPLES
+.TP
+.B proton_cli
+Start the interactive ANSI Terminal UI.
+.TP
+.B proton_cli \\-l
+Auto-scan and list all installed games across all Steam libraries.
+.TP
+.B proton_cli \\-g 1091500 \\-p deck \\-w \\-x
+Apply the Steam Deck Optimal preset to Cyberpunk 2077 (AppID 1091500), save to Steam VDF, and launch the game.
+.TP
+.B proton_cli \\-g "Elden Ring" \\-p esports \\-c \\-\\-auto-fix \\-w
+Select Elden Ring by name, apply the Esports preset, resolve any flag conflicts, and save to Steam configuration.
+.TP
+.B proton_cli \\-\\-restore latest
+Restore the most recent automatic VDF backup if a configuration issue occurs.
+
+.SH SEE ALSO
+.BR steam (6),
+.BR gamescope (1),
+.BR gamemoderun (1),
+.BR mangohud (1)
+
+.SH AUTHORS
+Written for the Proton Launch Options Manager project.
 `
     },
     {
@@ -2063,13 +2570,15 @@ echo "Apply preset and launch:       ./proton_cli -p deck -g ${selectedAppId} -w
 if [ -f "./proton_mgr" ]; then
     echo "Run GTK3 Desktop GUI:         ./proton_mgr"
 fi
+echo "View manpage:                 man ./proton_cli.1"
+echo "Install system-wide:          sudo make install"
 echo "======================================================================"
 `
     },
     {
       filename: 'README.md',
       language: 'markdown',
-      description: 'Detailed compilation, CLI flag usage, and TUI reference',
+      description: 'Detailed compilation, CLI flag usage, TUI reference, and manpage instructions',
       content: `# Proton Launch Options Manager in C (Pure C99 & GTK3)
 
 A lightweight, 100% offline, zero-dependency C utility and GTK3 application for Linux and Steam Deck to inspect, optimize, and manage Steam Proton launch parameters.
@@ -2099,20 +2608,34 @@ A lightweight, 100% offline, zero-dependency C utility and GTK3 application for 
 6. **Direct Steam URI Launcher (\`launcher.c\`):**
    * Launches games asynchronously via \`steam://rungameid/<appid>\` supporting Native and Flatpak Steam.
 
+7. **UNIX Manual Page (\`proton_cli.1\`):**
+   * Complete standard manpage documentation.
+   * View locally with \`man ./proton_cli.1\` or install to \`/usr/local/share/man/man1/\`.
+
 ## 🚀 Quick Start
 
 \`\`\`bash
-chmod +x build.sh
+# 1. Extract the .tar.zst archive
+tar --zstd -xvf proton_launch_manager_c_source.tar.zst
+cd proton_launch_manager
+
+# 2. build.sh is pre-configured with executable permissions (0755)
 ./build.sh
 
-# Interactive TUI mode
+# 3. Interactive Terminal TUI Mode
 ./proton_cli -i
 
-# Auto-scan installed Steam games
+# 4. Auto-scan installed Steam games
 ./proton_cli -l
 
-# Apply Steam Deck preset to game and save
+# 5. Apply Steam Deck preset to game and save
 ./proton_cli -g 1091500 -p deck -w -x
+
+# 6. Read the complete manual page
+man ./proton_cli.1
+
+# 7. Optional: Install system-wide (binary + manpage)
+sudo make install
 \`\`\`
 `
     }
