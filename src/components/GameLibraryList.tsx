@@ -1,6 +1,18 @@
 import React, { useState } from 'react';
 import { SteamGame } from '../types';
-import { Search, Star, Gamepad2, Plus, HardDrive, Image as ImageIcon, ArrowUpDown, ArrowUp, ArrowDown, CheckCircle2 } from 'lucide-react';
+import { 
+  Search, 
+  Star, 
+  Gamepad2, 
+  Plus, 
+  HardDrive, 
+  Image as ImageIcon, 
+  ArrowUpDown, 
+  ArrowUp, 
+  ArrowDown, 
+  CheckCircle2,
+  Rocket
+} from 'lucide-react';
 
 interface GameLibraryListProps {
   games: SteamGame[];
@@ -10,6 +22,8 @@ interface GameLibraryListProps {
   onOpenAddGame: () => void;
   onOpenScanLocalLibrary?: () => void;
   onOpenSteamGridDb?: (game: SteamGame) => void;
+  onDirectLaunchGame?: (game: SteamGame) => void;
+  searchInputRef?: React.RefObject<HTMLInputElement | null>;
 }
 
 export const GameLibraryList: React.FC<GameLibraryListProps> = ({
@@ -20,6 +34,8 @@ export const GameLibraryList: React.FC<GameLibraryListProps> = ({
   onOpenAddGame,
   onOpenScanLocalLibrary,
   onOpenSteamGridDb,
+  onDirectLaunchGame,
+  searchInputRef,
 }) => {
   const [search, setSearch] = useState('');
   const [filterFavorite, setFilterFavorite] = useState(false);
@@ -97,12 +113,16 @@ export const GameLibraryList: React.FC<GameLibraryListProps> = ({
           <div className="relative flex-1">
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
             <input
+              ref={searchInputRef}
               type="text"
-              placeholder="Search game or AppID..."
+              placeholder="Search game or AppID... (Ctrl+F)"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none transition"
+              className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-lg pl-8 pr-12 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none transition"
             />
+            <kbd className="absolute right-2 top-2 pointer-events-none hidden sm:inline-block font-mono text-[9px] bg-slate-900 text-slate-500 px-1.5 py-0.5 rounded border border-slate-800">
+              Ctrl+F
+            </kbd>
           </div>
 
           <button
@@ -316,21 +336,36 @@ export const GameLibraryList: React.FC<GameLibraryListProps> = ({
                   )}
                 </div>
 
-                {/* Favorite Star Button */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onToggleFavorite(game.id);
-                  }}
-                  className="absolute right-2 top-2 text-slate-600 hover:text-amber-400 transition"
-                  title="Toggle favorite"
-                >
-                  <Star
-                    className={`w-3.5 h-3.5 ${
-                      game.isFavorite ? 'fill-amber-400 text-amber-400' : ''
-                    }`}
-                  />
-                </button>
+                {/* Action Buttons (Direct Launch & Favorite) */}
+                <div className="absolute right-2 top-2 flex items-center space-x-1.5">
+                  {onDirectLaunchGame && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDirectLaunchGame(game);
+                      }}
+                      className="text-slate-500 hover:text-emerald-400 hover:bg-emerald-950/40 p-1 rounded transition opacity-70 group-hover:opacity-100"
+                      title={`Launch ${game.name} via Steam (steam://rungameid/${game.appId})`}
+                    >
+                      <Rocket className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleFavorite(game.id);
+                    }}
+                    className="text-slate-600 hover:text-amber-400 p-1 rounded transition"
+                    title="Toggle favorite"
+                  >
+                    <Star
+                      className={`w-3.5 h-3.5 ${
+                        game.isFavorite ? 'fill-amber-400 text-amber-400' : ''
+                      }`}
+                    />
+                  </button>
+                </div>
               </div>
             );
           })

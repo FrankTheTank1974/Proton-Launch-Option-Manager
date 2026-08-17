@@ -33,6 +33,8 @@ const DEFAULT_PROTON_PRESETS = [
   'GE-Proton9-25',
   'GE-Proton9-20',
   'GE-Proton8-32',
+  'Proton-RTSP',
+  'Proton-RTSP-9.0',
 ];
 
 export const ProtonVersionSelector: React.FC<ProtonVersionSelectorProps> = ({

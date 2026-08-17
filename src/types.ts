@@ -1,8 +1,18 @@
 export type FlagCategory = 
   | 'proton_runtime'
+  | 'proton_cachyos'
+  | 'proton_ge'
+  | 'proton_em'
+  | 'proton_dw'
+  | 'proton_rtsp'
+  | 'boxtron'
+  | 'luxtorpeda'
+  | 'roberta'
   | 'graphics_dxvk'
+  | 'lsfg_framegen'
   | 'performance_wrappers'
   | 'display_gamescope'
+  | 'low_latency'
   | 'debug_logs';
 
 export type PerformanceImpact = 'high' | 'medium' | 'low' | 'neutral' | 'debug';
@@ -51,6 +61,8 @@ export interface SteamGame {
   releaseDate?: string; // Release date (e.g. YYYY-MM-DD)
   isFavorite?: boolean;
   installedPath?: string;
+  installDirName?: string;
+  executablePath?: string;
   developer?: string;
 }
 

@@ -19,6 +19,9 @@ interface DetectedGameItem {
   selected: boolean;
   source: 'host-scan' | 'folder-picker' | 'vdf-file';
   installDate?: number;
+  installDirName?: string;
+  installedPath?: string;
+  executablePath?: string;
 }
 
 export const ScanLocalLibraryModal: React.FC<ScanLocalLibraryModalProps> = ({
@@ -55,6 +58,9 @@ export const ScanLocalLibraryModal: React.FC<ScanLocalLibraryModalProps> = ({
               selected: true,
               source: 'host-scan',
               installDate: g.installDate,
+              installDirName: g.installDirName,
+              installedPath: g.installedPath,
+              executablePath: g.executablePath,
             }));
           setDetectedGames(formatted);
           setScanMessage(`Successfully found ${formatted.length} installed Steam games on system!`);
@@ -250,6 +256,9 @@ export const ScanLocalLibraryModal: React.FC<ScanLocalLibraryModalProps> = ({
         ? new Date(g.installDate).toISOString().slice(0, 16).replace('T', ' ')
         : new Date().toISOString().slice(0, 16).replace('T', ' '),
       installDate: g.installDate,
+      installDirName: g.installDirName,
+      installedPath: g.installedPath,
+      executablePath: g.executablePath,
       isFavorite: false,
     }));
 
