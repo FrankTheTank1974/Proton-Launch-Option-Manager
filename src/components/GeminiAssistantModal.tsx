@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { SteamGame } from '../types';
+import { getProtonDbAdviceForGame } from '../data/protonDbKnowledge';
 import { X, Sparkles, Send, Bot, User, Loader2, Zap } from 'lucide-react';
 
 interface GeminiAssistantModalProps {
@@ -53,24 +54,20 @@ export const GeminiAssistantModal: React.FC<GeminiAssistantModalProps> = ({
         setResponse(data.advice);
         setSuggestedCommand(data.recommendedCommand || null);
       } else {
-        // Fallback static AI advice
+        const gameAdvice = getProtonDbAdviceForGame(selectedGame.name, selectedGame.appId, distro);
         setResponse(
           `For **${selectedGame.name}** on **${distro}**:\n\n` +
-          `1. **NTSync / Threading**: Set \`PROTON_USE_NTSYNC=1\` for near-native Linux kernel synchronization (requires Kernel 6.8+).\n` +
-          `2. **Nvidia DLSS / Reflex**: Enable \`PROTON_ENABLE_NVAPI=1\` if using an RTX GPU.\n` +
-          `3. **GPU Governor**: Use \`gamemoderun %command%\` to ensure performance mode.\n` +
-          `4. **VKD3D Ray Tracing**: Enable \`VKD3D_CONFIG=dxr11,dxr\` for Direct3D 12 Ray Tracing.`
+          gameAdvice.commentsAdvice.map((c, i) => `${i + 1}. ${c}`).join('\n')
         );
-        setSuggestedCommand(`PROTON_ENABLE_NVAPI=1 PROTON_USE_NTSYNC=1 VKD3D_CONFIG=dxr11,dxr gamemoderun %command%`);
+        setSuggestedCommand(gameAdvice.recommendedCommand);
       }
     } catch (err) {
+      const gameAdvice = getProtonDbAdviceForGame(selectedGame.name, selectedGame.appId, distro);
       setResponse(
         `For **${selectedGame.name}** on **${distro}**:\n\n` +
-        `• Set \`PROTON_USE_NTSYNC=1\` for fast thread sync.\n` +
-        `• Set \`PROTON_ENABLE_NVAPI=1\` for DLSS support.\n` +
-        `• Add \`gamemoderun %command%\` for CPU governor boost.`
+        gameAdvice.commentsAdvice.map((c) => `• ${c}`).join('\n')
       );
-      setSuggestedCommand(`PROTON_ENABLE_NVAPI=1 PROTON_USE_NTSYNC=1 gamemoderun %command%`);
+      setSuggestedCommand(gameAdvice.recommendedCommand);
     } finally {
       setLoading(false);
     }

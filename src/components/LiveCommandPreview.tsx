@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { SteamGame } from '../types';
+import { launchSteamGame } from '../utils/steamLauncher';
+import { getGameExecutableInfo } from '../utils/gamePathResolver';
+import { DirectSteamLauncherModal } from './DirectSteamLauncherModal';
 import { 
   Copy, 
   Check, 
@@ -12,7 +15,9 @@ import {
   Eye, 
   Play,
   HardDrive,
-  DownloadCloud
+  DownloadCloud,
+  Rocket,
+  ExternalLink
 } from 'lucide-react';
 
 interface LiveCommandPreviewProps {
@@ -22,6 +27,8 @@ interface LiveCommandPreviewProps {
   activeFlagNames: string[];
   onWriteToSteamNotice?: (message: string, isSuccess: boolean) => void;
   onReadFromSteamSuccess?: (launchOptions: string) => void;
+  onOpenSteamLauncher?: () => void;
+  onOpenWriteToSteamModal?: () => void;
 }
 
 export const LiveCommandPreview: React.FC<LiveCommandPreviewProps> = ({
@@ -31,12 +38,28 @@ export const LiveCommandPreview: React.FC<LiveCommandPreviewProps> = ({
   activeFlagNames,
   onWriteToSteamNotice,
   onReadFromSteamSuccess,
+  onOpenSteamLauncher,
+  onOpenWriteToSteamModal,
 }) => {
   const [copied, setCopied] = useState(false);
   const [applied, setApplied] = useState(false);
   const [writingSteam, setWritingSteam] = useState(false);
   const [readingSteam, setReadingSteam] = useState(false);
+  const [launchingSteam, setLaunchingSteam] = useState(false);
   const [showSimulator, setShowSimulator] = useState(false);
+  const [isLauncherModalOpen, setIsLauncherModalOpen] = useState(false);
+
+  const handleQuickLaunch = async () => {
+    setLaunchingSteam(true);
+    try {
+      const res = await launchSteamGame(selectedGame.appId, selectedGame.name);
+      onWriteToSteamNotice?.(`🚀 Dispatched Steam launch for ${selectedGame.name} (steam://rungameid/${selectedGame.appId})`, true);
+    } catch {
+      onWriteToSteamNotice?.(`Triggered steam://rungameid/${selectedGame.appId}`, true);
+    } finally {
+      setLaunchingSteam(false);
+    }
+  };
 
   const handleCopy = () => {
     navigator.clipboard.writeText(commandString);
@@ -51,6 +74,16 @@ export const LiveCommandPreview: React.FC<LiveCommandPreviewProps> = ({
   };
 
   const handleWriteToSteam = async () => {
+    // 1. Immediately apply & save to game in library state
+    onApplyCommand(commandString);
+
+    // 2. If dedicated modal handler provided, trigger full interactive write & sync hub
+    if (onOpenWriteToSteamModal) {
+      onOpenWriteToSteamModal();
+      return;
+    }
+
+    // Fallback: direct API call
     setWritingSteam(true);
     try {
       const res = await fetch('/api/steam/write-launch-options', {
@@ -166,55 +199,93 @@ export const LiveCommandPreview: React.FC<LiveCommandPreviewProps> = ({
           {renderHighlightedCommand()}
         </div>
 
-        {/* Action Buttons Toolbar (No overlay, flex wrap toolbar underneath) */}
-        <div className="flex flex-wrap items-center justify-end gap-2 pt-1 border-t border-slate-800/60">
-          <button
-            onClick={handleCopy}
-            className={`px-3 py-1.5 rounded-lg border text-xs font-medium flex items-center space-x-1.5 transition shadow-sm ${
-              copied
-                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-            }`}
-            title="Copy command to clipboard"
-          >
-            {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-            <span>{copied ? 'Copied!' : 'Copy'}</span>
-          </button>
+        {/* Action Buttons Toolbar */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800/60">
+          
+          {/* Steam Direct Launcher Trigger */}
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={handleQuickLaunch}
+              disabled={launchingSteam}
+              className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition shadow-md shadow-emerald-950/40 active:scale-95"
+              title={`Directly launch ${selectedGame.name} via Steam URI protocol (steam://rungameid/${selectedGame.appId})`}
+            >
+              <Rocket className={`w-3.5 h-3.5 ${launchingSteam ? 'animate-spin' : ''}`} />
+              <span>{launchingSteam ? 'Launching...' : 'Launch via Steam'}</span>
+            </button>
 
-          <button
-            onClick={handleApply}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm ${
-              applied
-                ? 'bg-emerald-600 text-white'
-                : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-            }`}
-            title="Save launch options in manager state"
-          >
-            {applied ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5 text-cyan-400" />}
-            <span>{applied ? 'Saved!' : 'Save Game'}</span>
-          </button>
+            <button
+              onClick={() => setIsLauncherModalOpen(true)}
+              className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-2 py-1.5 rounded-lg text-xs font-medium flex items-center space-x-1 transition"
+              title="Open Direct Steam Launcher details (CLI commands, .desktop shortcut export)"
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="hidden sm:inline">Launch Hub</span>
+            </button>
+          </div>
 
-          <button
-            onClick={handleReadFromSteam}
-            disabled={readingSteam}
-            className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm"
-            title="Read current launch options for this game directly from Steam localconfig.vdf"
-          >
-            <DownloadCloud className={`w-3.5 h-3.5 text-cyan-400 ${readingSteam ? 'animate-bounce' : ''}`} />
-            <span>{readingSteam ? 'Reading...' : 'Read from Steam'}</span>
-          </button>
+          {/* Core Controls */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={handleCopy}
+              className={`px-3 py-1.5 rounded-lg border text-xs font-medium flex items-center space-x-1.5 transition shadow-sm ${
+                copied
+                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+              }`}
+              title="Copy command to clipboard"
+            >
+              {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copied ? 'Copied!' : 'Copy'}</span>
+            </button>
 
-          <button
-            onClick={handleWriteToSteam}
-            disabled={writingSteam}
-            className="bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition shadow-md shadow-cyan-950/40"
-            title="Write launch options directly to Steam localconfig.vdf on disk"
-          >
-            <HardDrive className={`w-3.5 h-3.5 ${writingSteam ? 'animate-spin' : ''}`} />
-            <span>{writingSteam ? 'Writing...' : 'Write to Steam'}</span>
-          </button>
+            <button
+              onClick={handleApply}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm ${
+                applied
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+              }`}
+              title="Save launch options in manager state (Ctrl+S)"
+            >
+              {applied ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5 text-cyan-400" />}
+              <span>{applied ? 'Saved!' : 'Save Game'}</span>
+              <kbd className="font-mono text-[9px] bg-slate-900 text-slate-400 px-1 py-0.5 rounded border border-slate-700/80 hidden sm:inline-block">
+                Ctrl+S
+              </kbd>
+            </button>
+
+            <button
+              onClick={handleReadFromSteam}
+              disabled={readingSteam}
+              className="bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm"
+              title="Read current launch options for this game directly from Steam localconfig.vdf"
+            >
+              <DownloadCloud className={`w-3.5 h-3.5 text-cyan-400 ${readingSteam ? 'animate-bounce' : ''}`} />
+              <span>{readingSteam ? 'Reading...' : 'Read from Steam'}</span>
+            </button>
+
+            <button
+              onClick={handleWriteToSteam}
+              disabled={writingSteam}
+              className="bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition shadow-md shadow-cyan-950/40"
+              title="Write launch options directly to Steam localconfig.vdf on disk"
+            >
+              <HardDrive className={`w-3.5 h-3.5 ${writingSteam ? 'animate-spin' : ''}`} />
+              <span>{writingSteam ? 'Writing...' : 'Write to Steam'}</span>
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Direct Steam Launcher Modal */}
+      <DirectSteamLauncherModal
+        isOpen={isLauncherModalOpen}
+        onClose={() => setIsLauncherModalOpen(false)}
+        game={selectedGame}
+        currentLaunchOptions={commandString}
+        onShowToast={(msg) => onWriteToSteamNotice?.(msg, true)}
+      />
 
       {/* Active Flag Badges */}
       {activeFlagNames.length > 0 && (
@@ -232,21 +303,58 @@ export const LiveCommandPreview: React.FC<LiveCommandPreviewProps> = ({
       )}
 
       {/* Simulation / Resolution View */}
-      {showSimulator && (
-        <div className="bg-slate-950/90 border border-cyan-500/30 rounded-xl p-3 space-y-2 mt-2">
-          <div className="flex items-center space-x-2 text-cyan-400 text-xs font-semibold">
-            <Play className="w-3.5 h-3.5" />
-            <span>Simulated Steam Execution Command (Linux Bash):</span>
+      {showSimulator && (() => {
+        const exeInfo = getGameExecutableInfo(
+          selectedGame.appId,
+          selectedGame.name,
+          selectedGame.installedPath,
+          selectedGame.executablePath,
+          selectedGame.installDirName
+        );
+
+        // Proton binary path based on selected runner
+        const runnerPath = selectedGame.protonVersion.includes('GE')
+          ? `~/.local/share/Steam/compatibilitytools.d/${selectedGame.protonVersion.replace(/\s+/g, '_')}/proton`
+          : `~/.local/share/Steam/steamapps/common/${selectedGame.protonVersion.replace(/[\s-]+/g, ' ')}/proton`;
+
+        const fullProcessCommand = `"${runnerPath}" run "${exeInfo.fullExePath}"`;
+        const renderedFullBash = commandString.replace('%command%', fullProcessCommand);
+
+        return (
+          <div className="bg-slate-950/95 border border-cyan-500/30 rounded-xl p-3.5 space-y-2.5 mt-2 shadow-inner">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2 text-cyan-400 text-xs font-semibold">
+                <Play className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Resolved Steam Process & Executable Pipeline:</span>
+              </div>
+              <span className="text-[10px] bg-cyan-950/80 text-cyan-300 px-2 py-0.5 rounded border border-cyan-800/80 font-mono">
+                {exeInfo.executableName}
+              </span>
+            </div>
+
+            {/* Path breakdown details */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono bg-slate-900/60 p-2 rounded-lg border border-slate-800/80">
+              <div>
+                <span className="text-slate-500 block text-[10px] uppercase tracking-wider">Install Directory</span>
+                <span className="text-slate-300 font-semibold truncate block" title={exeInfo.installDirName}>
+                  {exeInfo.installDirName}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[10px] uppercase tracking-wider">Game Executable Path</span>
+                <span className="text-emerald-400 font-semibold truncate block" title={exeInfo.relativeExePath}>
+                  {exeInfo.relativeExePath}
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-slate-900/90 p-2.5 rounded-lg font-mono text-[11px] text-slate-300 border border-slate-800 break-all leading-relaxed">
+              <span className="text-slate-500"># Native Linux Bash command evaluated by Steam runtime at launch:</span><br />
+              <span className="text-amber-300">{renderedFullBash}</span>
+            </div>
           </div>
-          <div className="bg-slate-900/90 p-2.5 rounded-lg font-mono text-[11px] text-slate-300 border border-slate-800 break-all leading-relaxed">
-            <span className="text-slate-500"># Steam launches game process via wrapper pipeline:</span><br />
-            {commandString.replace(
-              '%command%',
-              `~/.local/share/Steam/steamapps/common/Proton/proton run /path/to/${selectedGame.name.replace(/\s+/g, '')}.exe`
-            )}
-          </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 };

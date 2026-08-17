@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { SteamGame } from '../types';
+import { getProtonDbAdviceForGame } from '../data/protonDbKnowledge';
 import {
   X,
   MessageSquareQuote,
@@ -145,35 +146,16 @@ export const ProtonDbModal: React.FC<ProtonDbModalProps> = ({
         throw new Error('Failed to fetch ProtonDB insights');
       }
     } catch (err) {
-      setError('Could not retrieve ProtonDB community comments at this moment. Using static offline recommendations.');
+      setError('Could not connect to online service. Using curated offline ProtonDB community recommendations.');
+      const gameAdvice = getProtonDbAdviceForGame(selectedGame.name, selectedGame.appId, distro);
       const fallbackData: ProtonDbResult = {
-        tier: 'Gold',
-        trending: 'Gold',
-        summary: `ProtonDB community consensus for ${selectedGame.name} confirms high playability with minor flag optimizations.`,
-        suggestions: [
-          {
-            title: 'Kernel Thread Synchronization',
-            description: 'Sets PROTON_USE_NTSYNC=1 to eliminate CPU overhead and frame micro-stuttering.',
-            flag: 'PROTON_USE_NTSYNC=1',
-          },
-          {
-            title: 'Ray Tracing & DX12 Mapping',
-            description: 'Configures VKD3D_CONFIG=dxr11,dxr and PROTON_ENABLE_NVAPI=1 for DirectX 12 features.',
-            flag: 'PROTON_ENABLE_NVAPI=1 VKD3D_CONFIG=dxr11,dxr',
-          },
-          {
-            title: 'GameMode CPU Governor',
-            description: 'Wraps launch command with gamemoderun to prioritize CPU frequency scaling.',
-            flag: 'gamemoderun',
-          },
-        ],
-        commentsAdvice: [
-          `**Kernel Synchronization:** User comments strongly recommend \`PROTON_USE_NTSYNC=1\` to prevent micro-stuttering on Linux.`,
-          `**CPU & GPU Governor:** Many Linux reports wrap the command in \`gamemoderun %command%\` for consistent frame timing.`,
-          `**DirectX 12 Ray Tracing:** Enabling \`VKD3D_CONFIG=dxr11,dxr\` activates hardware ray tracing on compatible GPUs.`,
-        ],
-        recommendedCommand: `PROTON_USE_NTSYNC=1 VKD3D_CONFIG=dxr11,dxr gamemoderun %command%`,
-        sourceUrl: `https://www.protondb.com/app/${selectedGame.appId}`,
+        tier: gameAdvice.tier,
+        trending: gameAdvice.trending,
+        summary: gameAdvice.summary,
+        suggestions: gameAdvice.suggestions,
+        commentsAdvice: gameAdvice.commentsAdvice,
+        recommendedCommand: gameAdvice.recommendedCommand,
+        sourceUrl: gameAdvice.sourceUrl || `https://www.protondb.com/app/${selectedGame.appId}`,
       };
 
       setResult(fallbackData);

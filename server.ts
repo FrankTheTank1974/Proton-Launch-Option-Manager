@@ -2,8 +2,10 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import child_process from 'child_process';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
+import { getProtonDbAdviceForGame } from './src/data/protonDbKnowledge';
 
 async function startServer() {
   const app = express();
@@ -40,13 +42,11 @@ async function startServer() {
     try {
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
+        const gameAdvice = getProtonDbAdviceForGame(gameName, undefined, distro);
         return res.json({
           advice: `For **${gameName}** on **${distro}**:\n\n` +
-            `• Set \`PROTON_USE_NTSYNC=1\` for fast kernel thread synchronization.\n` +
-            `• Set \`PROTON_ENABLE_NVAPI=1\` for Nvidia DLSS and Reflex.\n` +
-            `• Wrap with \`gamemoderun %command%\` for CPU/GPU governor priority.\n` +
-            `• Configure \`VKD3D_CONFIG=dxr11,dxr\` for Direct3D 12 Ray Tracing.`,
-          recommendedCommand: `PROTON_ENABLE_NVAPI=1 PROTON_USE_NTSYNC=1 VKD3D_CONFIG=dxr11,dxr gamemoderun %command%`,
+            gameAdvice.commentsAdvice.map(c => `• ${c.replace(/\*\*/g, '')}`).join('\n'),
+          recommendedCommand: gameAdvice.recommendedCommand,
         });
       }
 
@@ -60,7 +60,13 @@ The user is playing "${gameName}" on "${distro}".
 Current launch command: "${currentCommand || '%command%'}".
 User question: "${prompt}".
 
-Provide a concise, highly technical answer detailing optimal Proton flags (such as PROTON_USE_WINE, PROTON_USE_NTSYNC, DISABLE_SHADER_CACHE, gamemoderun, VKD3D_CONFIG, mangohud, PROTON_ENABLE_NVAPI) and recommend a final single line command string formatted with %command%. Format your response as JSON with keys: "advice" (string) and "recommendedCommand" (string).`,
+CRITICAL GRAPHICS & ENGINE RULES:
+- NEVER suggest ray tracing flags (e.g. VKD3D_CONFIG=dxr or VKD3D_CONFIG=dxr11,dxr) or mention ray tracing unless "${gameName}" explicitly features native hardware DirectX 12 DXR Ray Tracing (e.g. Cyberpunk 2077, Metro Exodus Enhanced, Control, Portal with RTX).
+- Most games DO NOT have hardware ray tracing (e.g. God of War Ragnarök, Starfield, Baldur's Gate 3, Helldivers 2, Apex Legends, CS2, Fallout 4, Skyrim, GTA V, Monster Hunter: World). DO NOT recommend ray tracing flags for these games.
+- For DirectX 11 / DX9 / OpenGL / Vulkan native titles, do NOT recommend VKD3D_CONFIG (Wine uses DXVK instead).
+- Only recommend PROTON_ENABLE_NVAPI=1 if the game supports NVIDIA DLSS / Reflex features.
+
+Provide a concise, highly technical answer detailing optimal Proton flags (such as PROTON_USE_NTSYNC, gamemoderun, mangohud, PROTON_ENABLE_NVAPI, RADV_PERFTEST=sam, WINEDLLOVERRIDES) and recommend a final single line command string formatted with %command%. Format your response as JSON with keys: "advice" (string) and "recommendedCommand" (string).`,
       });
 
       const text = response.text || '';
@@ -119,42 +125,18 @@ Provide a concise, highly technical answer detailing optimal Proton flags (such 
     try {
       const apiKey = process.env.GEMINI_API_KEY;
       if (isAiDisabled() || !apiKey) {
-        // Fallback realistic community advice if AI disabled or no API key
-        return res.json({
-          tier: protonDbTier,
-          trending: protonDbTrending,
-          summary: `ProtonDB community reports for **${gameName}** indicate solid stability on Linux and Steam Deck when using community-tested launch flags.`,
-          suggestions: [
-            {
-              title: "Kernel Thread Synchronization",
-              description: "Sets PROTON_USE_NTSYNC=1 to eliminate CPU overhead and frame micro-stuttering.",
-              flag: "PROTON_USE_NTSYNC=1",
-            },
-            {
-              title: "Ray Tracing & DX12 Mapping",
-              description: "Configures VKD3D_CONFIG=dxr11,dxr and PROTON_ENABLE_NVAPI=1 for DirectX 12 features.",
-              flag: "PROTON_ENABLE_NVAPI=1 VKD3D_CONFIG=dxr11,dxr",
-            },
-            {
-              title: "GameMode CPU Governor",
-              description: "Wraps launch command with gamemoderun to prioritize CPU frequency scaling.",
-              flag: "gamemoderun",
-            },
-            {
-              title: "MangoHud Performance Overlay",
-              description: "Wraps launch command with mangohud to monitor FPS and frametimes.",
-              flag: "mangohud",
-            },
-          ],
-          commentsAdvice: [
-            `**Kernel Thread Synchronization:** Many user reports recommend setting \`PROTON_USE_NTSYNC=1\` (or \`PROTON_NO_ESYNC=1\`) to eliminate frame stuttering in dense areas.`,
-            `**Ray Tracing & Graphics:** Comments from AMD and NVIDIA GPU testers suggest configuring \`VKD3D_CONFIG=dxr11,dxr\` and \`PROTON_ENABLE_NVAPI=1\` for proper DirectX 12 feature mapping.`,
-            `**Governor & Frame Pacing:** Steam Deck and Arch users consistently wrap launch commands with \`gamemoderun mangohud %command%\` to prioritize CPU frequencies and monitor frame timing.`,
-            `**Cutscenes & Media Codecs:** Users experiencing intro video skips advise using Proton GE (GloriousEggroll) for expanded codec support.`
-          ],
-          recommendedCommand: `PROTON_ENABLE_NVAPI=1 PROTON_USE_NTSYNC=1 VKD3D_CONFIG=dxr11,dxr gamemoderun mangohud %command%`,
-          sourceUrl: appId ? `https://www.protondb.com/app/${appId}` : `https://www.protondb.com`,
-        });
+        // High quality game-specific ProtonDB advice & heuristics for offline / localhost mode
+        const curatedInsight = getProtonDbAdviceForGame(gameName, appId, distro);
+        if (protonDbTier && protonDbTier !== 'Unknown') {
+          curatedInsight.tier = protonDbTier as any;
+        }
+        if (protonDbTrending && protonDbTrending !== 'Unknown') {
+          curatedInsight.trending = protonDbTrending as any;
+        }
+        if (appId) {
+          curatedInsight.sourceUrl = `https://www.protondb.com/app/${appId}`;
+        }
+        return res.json(curatedInsight);
       }
 
       const ai = new GoogleGenAI({ apiKey });
@@ -168,7 +150,13 @@ Provide a concise, highly technical answer detailing optimal Proton flags (such 
 We are examining ProtonDB (https://www.protondb.com${appId ? `/app/${appId}` : ''}) community reports and user comments for "${gameName}" (Steam App ID: ${appId || 'N/A'}) running on Linux / Steam Deck (${distro}).
 
 Search ProtonDB community reports and Linux gamer comments for "${gameName}".
-Identify specific launch flags, environment variables, or wrappers tested by users in their comments (such as PROTON_USE_NTSYNC, PROTON_NO_ESYNC, PROTON_ENABLE_NVAPI, VKD3D_CONFIG, WINEDLLOVERRIDES, gamemoderun, mangohud, gamescope, etc.).
+Identify specific launch flags, environment variables, or wrappers tested by users in their comments (such as PROTON_USE_NTSYNC, PROTON_NO_ESYNC, PROTON_ENABLE_NVAPI, RADV_PERFTEST=sam, WINEDLLOVERRIDES, gamemoderun, mangohud, gamescope, etc.).
+
+CRITICAL GRAPHICS & ENGINE RULES:
+- ONLY recommend ray tracing flags (e.g. VKD3D_CONFIG=dxr or VKD3D_CONFIG=dxr11,dxr) or mention ray tracing if "${gameName}" explicitly features native hardware DirectX 12 DXR Ray Tracing (e.g. Cyberpunk 2077, Metro Exodus Enhanced, Control, Portal with RTX).
+- NEVER recommend ray tracing or VKD3D_CONFIG DXR flags for games that do not support hardware ray tracing (such as Baldur's Gate 3, God of War Ragnarök, Starfield, Apex Legends, CS2, Fallout 4, Skyrim, Helldivers 2, Monster Hunter: World, GTA V, etc.).
+- For DirectX 11 / DX9 / OpenGL / Vulkan native titles, do NOT recommend VKD3D_CONFIG (Wine uses DXVK instead).
+- Only recommend PROTON_ENABLE_NVAPI=1 if the game supports NVIDIA DLSS / Reflex features.
 
 Return a JSON object with:
 - "tier": Estimated ProtonDB Tier string (e.g. "Platinum", "Gold", "Silver", "Bronze", or "${protonDbTier}").
@@ -194,7 +182,12 @@ Return ONLY valid JSON without markdown fences if possible.`,
             model,
             contents: `You are an expert Linux gaming community analyst.
 Analyze ProtonDB community reports and recommended launch options for "${gameName}" on Linux (${distro}).
-Identify specific launch flags, environment variables, or wrappers (such as PROTON_USE_NTSYNC, PROTON_ENABLE_NVAPI, VKD3D_CONFIG, gamemoderun, mangohud, gamescope).
+Identify specific launch flags, environment variables, or wrappers (such as PROTON_USE_NTSYNC, PROTON_ENABLE_NVAPI, RADV_PERFTEST=sam, gamemoderun, mangohud, gamescope).
+
+CRITICAL GRAPHICS & ENGINE RULES:
+- ONLY recommend ray tracing flags (e.g. VKD3D_CONFIG=dxr or VKD3D_CONFIG=dxr11,dxr) if "${gameName}" natively features hardware DirectX 12 Ray Tracing.
+- NEVER suggest ray tracing flags for games without ray tracing (e.g. Baldur's Gate 3, God of War Ragnarök, Starfield, Apex Legends, CS2, Fallout 4, Skyrim, Helldivers 2, Monster Hunter: World, GTA V).
+- For DX11 titles, do NOT recommend VKD3D_CONFIG.
 
 Return a JSON object with:
 - "tier": "${protonDbTier}"
@@ -227,30 +220,18 @@ Return ONLY valid JSON.`,
         }
       }
 
-      return res.json({
-        tier: protonDbTier,
-        trending: protonDbTrending,
-        summary: `ProtonDB community consensus for ${gameName} highlights excellent performance when utilizing recommended performance wrappers.`,
-        commentsAdvice: [
-          `**Community Flags:** Users report significant performance gains using \`PROTON_USE_NTSYNC=1\` and \`gamemoderun\`.`,
-          `**AI Analysis Summary:** ${text.replace(/```json|```/g, '').slice(0, 300)}...`
-        ],
-        recommendedCommand: `PROTON_USE_NTSYNC=1 gamemoderun mangohud %command%`,
-        sourceUrl: appId ? `https://www.protondb.com/app/${appId}` : `https://www.protondb.com`,
-      });
+      const fallbackInsight = getProtonDbAdviceForGame(gameName, appId, distro);
+      if (protonDbTier && protonDbTier !== 'Unknown') fallbackInsight.tier = protonDbTier as any;
+      if (protonDbTrending && protonDbTrending !== 'Unknown') fallbackInsight.trending = protonDbTrending as any;
+      if (appId) fallbackInsight.sourceUrl = `https://www.protondb.com/app/${appId}`;
+      return res.json(fallbackInsight);
     } catch (err) {
       console.warn('ProtonDB Insights Fallback:', err);
-      return res.json({
-        tier: protonDbTier,
-        trending: protonDbTrending,
-        summary: `ProtonDB user reports for **${gameName}** recommend using standard Linux gaming performance wrappers.`,
-        commentsAdvice: [
-          `**Kernel Synchronization:** Community reports advise setting \`PROTON_USE_NTSYNC=1\` for lower CPU overhead.`,
-          `**CPU & Overlay:** Gamers frequently use \`gamemoderun mangohud %command%\` for smooth frame pacing on ${distro}.`
-        ],
-        recommendedCommand: `PROTON_USE_NTSYNC=1 gamemoderun mangohud %command%`,
-        sourceUrl: appId ? `https://www.protondb.com/app/${appId}` : `https://www.protondb.com`,
-      });
+      const fallbackInsight = getProtonDbAdviceForGame(gameName, appId, distro);
+      if (protonDbTier && protonDbTier !== 'Unknown') fallbackInsight.tier = protonDbTier as any;
+      if (protonDbTrending && protonDbTrending !== 'Unknown') fallbackInsight.trending = protonDbTrending as any;
+      if (appId) fallbackInsight.sourceUrl = `https://www.protondb.com/app/${appId}`;
+      return res.json(fallbackInsight);
     }
   });
 
@@ -258,7 +239,16 @@ Return ONLY valid JSON.`,
   app.get('/api/steam/scan-local', (req, res) => {
     try {
       const homeDir = os.homedir();
-      const detectedGamesMap = new Map<string, { appId: number; name: string; currentLaunchOptions: string; sourcePath: string; installDate?: number }>();
+      const detectedGamesMap = new Map<string, { 
+        appId: number; 
+        name: string; 
+        currentLaunchOptions: string; 
+        sourcePath: string; 
+        installDate?: number;
+        installDirName?: string;
+        installedPath?: string;
+        executablePath?: string;
+      }>();
 
       const possiblePaths = [
         path.join(homeDir, '.local/share/Steam'),
@@ -338,6 +328,39 @@ Return ONLY valid JSON.`,
                     }
                   }
 
+                  const installdirMatch = acfText.match(/"installdir"\s*"([^"]*)"/i);
+                  const installDirName = installdirMatch ? installdirMatch[1] : name;
+                  const commonGamePath = path.join(appsDir, 'common', installDirName);
+
+                  let discoveredExePath = '';
+                  if (fs.existsSync(commonGamePath)) {
+                    try {
+                      // Fast scan common game directory for executable files (.exe or Linux binary)
+                      const scanExes = (dir: string, depth = 0): string | null => {
+                        if (depth > 3) return null;
+                        const entries = fs.readdirSync(dir, { withFileTypes: true });
+                        const files = entries.filter((e) => e.isFile());
+                        const dirs = entries.filter((e) => e.isDirectory() && !e.name.startsWith('.') && e.name !== 'CrashReport' && e.name !== 'DirectX' && e.name !== '_CommonRedist');
+                        
+                        // Check for prominent .exe files
+                        const exeFiles = files.filter((f) => f.name.endsWith('.exe') && !f.name.toLowerCase().includes('crash') && !f.name.toLowerCase().includes('unins') && !f.name.toLowerCase().includes('unitycrash'));
+                        if (exeFiles.length > 0) {
+                          // Prefer matching game name or shipping binaries
+                          const bestExe = exeFiles.find((f) => f.name.toLowerCase().includes('shipping') || f.name.toLowerCase().includes('win64') || f.name.toLowerCase().includes(installDirName.toLowerCase().replace(/[^a-z0-9]/g, ''))) || exeFiles[0];
+                          return path.relative(commonGamePath, path.join(dir, bestExe.name)).replace(/\\/g, '/');
+                        }
+
+                        for (const sub of dirs) {
+                          const res = scanExes(path.join(dir, sub.name), depth + 1);
+                          if (res) return res;
+                        }
+                        return null;
+                      };
+
+                      discoveredExePath = scanExes(commonGamePath) || '';
+                    } catch {}
+                  }
+
                   if (name && !isRuntime) {
                     detectedGamesMap.set(appId, {
                       appId: parseInt(appId, 10),
@@ -345,6 +368,9 @@ Return ONLY valid JSON.`,
                       currentLaunchOptions: '',
                       sourcePath: filePath,
                       installDate,
+                      installDirName,
+                      installedPath: commonGamePath,
+                      executablePath: discoveredExePath,
                     });
                   }
                 }
@@ -614,44 +640,214 @@ Return ONLY valid JSON.`,
     return res.json({ success: true, details: results });
   });
 
+  function findMatchingBraceIndex(text: string, openBraceIndex: number): number {
+    let depth = 0;
+    let inString = false;
+    let escapeNext = false;
+
+    for (let i = openBraceIndex; i < text.length; i++) {
+      const char = text[i];
+      if (escapeNext) {
+        escapeNext = false;
+        continue;
+      }
+      if (char === '\\') {
+        escapeNext = true;
+        continue;
+      }
+      if (char === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (!inString) {
+        if (char === '{') {
+          depth++;
+        } else if (char === '}') {
+          depth--;
+          if (depth === 0) return i;
+        }
+      }
+    }
+    return -1;
+  }
+
   // Helper to patch LaunchOptions inside localconfig.vdf text
   function updateLaunchOptionsInVdf(vdfText: string, appIdStr: string, newLaunchOptions: string): string {
     const appId = String(appIdStr);
     const escapedOpts = newLaunchOptions.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const appIdQuoted = `"${appId}"`;
 
-    // 1. Check if "appId" block exists in VDF
-    const appBlockRegex = new RegExp(`("${appId}")(\\s*\\{)`, 'i');
+    let searchPos = 0;
+    let appFoundIndex = -1;
 
-    if (appBlockRegex.test(vdfText)) {
-      // Search for LaunchOptions under this app block
-      const appLaunchOptionsRegex = new RegExp(`("${appId}"\\s*\\{[^}]*?)("LaunchOptions"\\s*")[^"]*(")`, 'i');
-      if (appLaunchOptionsRegex.test(vdfText)) {
-        return vdfText.replace(appLaunchOptionsRegex, `$1$2${escapedOpts}$3`);
-      } else {
-        return vdfText.replace(appBlockRegex, `$1$2\n\t\t\t\t\t"LaunchOptions"\t\t"${escapedOpts}"`);
+    while (true) {
+      const idx = vdfText.indexOf(appIdQuoted, searchPos);
+      if (idx === -1) break;
+
+      const afterApp = vdfText.slice(idx + appIdQuoted.length);
+      const braceMatch = afterApp.match(/^\s*\{/);
+      if (braceMatch) {
+        appFoundIndex = idx;
+        break;
       }
-    } else {
-      // Insert new appId block under "apps"
-      const appsSectionRegex = /("apps"\s*\{)/i;
-      if (appsSectionRegex.test(vdfText)) {
-        const newAppBlock = `$1\n\t\t\t\t"${appId}"\n\t\t\t\t{\n\t\t\t\t\t"LaunchOptions"\t\t"${escapedOpts}"\n\t\t\t\t}`;
-        return vdfText.replace(appsSectionRegex, newAppBlock);
-      } else {
-        const endBraceIndex = vdfText.lastIndexOf('}');
-        if (endBraceIndex !== -1) {
-          const appBlockStr = `\n\t"apps"\n\t{\n\t\t"${appId}"\n\t\t{\n\t\t\t"LaunchOptions"\t\t"${escapedOpts}"\n\t\t}\n\t}\n`;
-          return vdfText.slice(0, endBraceIndex) + appBlockStr + vdfText.slice(endBraceIndex);
+      searchPos = idx + appIdQuoted.length;
+    }
+
+    if (appFoundIndex !== -1) {
+      const openBraceIdx = vdfText.indexOf('{', appFoundIndex);
+      if (openBraceIdx !== -1) {
+        const closeBraceIdx = findMatchingBraceIndex(vdfText, openBraceIdx);
+        if (closeBraceIdx !== -1) {
+          const appBody = vdfText.slice(openBraceIdx + 1, closeBraceIdx);
+          const launchOptsRegex = /("LaunchOptions"\s*")[^"]*(")/i;
+          if (launchOptsRegex.test(appBody)) {
+            const updatedBody = appBody.replace(launchOptsRegex, `$1${escapedOpts}$2`);
+            return vdfText.slice(0, openBraceIdx + 1) + updatedBody + vdfText.slice(closeBraceIdx);
+          } else {
+            const insertContent = `\n\t\t\t\t\t"LaunchOptions"\t\t"${escapedOpts}"`;
+            return vdfText.slice(0, openBraceIdx + 1) + insertContent + vdfText.slice(openBraceIdx + 1);
+          }
         }
       }
     }
+
+    const appsIdx = vdfText.search(/"apps"\s*\{/i);
+    if (appsIdx !== -1) {
+      const openBraceIdx = vdfText.indexOf('{', appsIdx);
+      if (openBraceIdx !== -1) {
+        const newAppBlock = `\n\t\t\t\t"${appId}"\n\t\t\t\t{\n\t\t\t\t\t"LaunchOptions"\t\t"${escapedOpts}"\n\t\t\t\t}`;
+        return vdfText.slice(0, openBraceIdx + 1) + newAppBlock + vdfText.slice(openBraceIdx + 1);
+      }
+    }
+
+    const lastBraceIdx = vdfText.lastIndexOf('}');
+    if (lastBraceIdx !== -1) {
+      const appBlockStr = `\n\t"apps"\n\t{\n\t\t"${appId}"\n\t\t{\n\t\t\t"LaunchOptions"\t\t"${escapedOpts}"\n\t\t}\n\t}\n`;
+      return vdfText.slice(0, lastBraceIdx) + appBlockStr + vdfText.slice(lastBraceIdx);
+    }
+
     return vdfText;
+  }
+
+  // Steam Direct URI / System Launch Endpoint (Dispatches steam://rungameid/<appId> or steam command on Linux/macOS/Windows)
+  app.post('/api/steam/launch-game', (req, res) => {
+    try {
+      const { appId, gameName } = req.body;
+      if (!appId) {
+        return res.status(400).json({ success: false, error: 'AppId is required to launch game' });
+      }
+
+      const steamUri = `steam://rungameid/${appId}`;
+      const isLinux = os.platform() === 'linux';
+      const isMac = os.platform() === 'darwin';
+      const isWindows = os.platform() === 'win32';
+
+      let dispatchedCommand = '';
+      let executionMethod = 'browser_uri';
+
+      // Helper to safely spawn detached processes without unhandled ENOENT error event crashes
+      const safeSpawnDetached = (cmd: string, args: string[]) => {
+        try {
+          const child = child_process.spawn(cmd, args, {
+            detached: true,
+            stdio: 'ignore',
+          });
+          child.on('error', (err) => {
+            console.warn(`[SteamLauncher] Safe spawn notice for "${cmd}": ${err.message}`);
+          });
+          child.unref();
+          return true;
+        } catch (err: any) {
+          console.warn(`[SteamLauncher] Spawn exception for "${cmd}":`, err?.message);
+          return false;
+        }
+      };
+
+      // On server host (if running locally on user's machine / Steam Deck):
+      if (isLinux) {
+        const isFlatpakSteam = fs.existsSync(path.join(os.homedir(), '.var/app/com.valvesoftware.Steam'));
+        if (isFlatpakSteam) {
+          dispatchedCommand = `flatpak run com.valvesoftware.Steam "${steamUri}"`;
+          safeSpawnDetached('flatpak', ['run', 'com.valvesoftware.Steam', steamUri]);
+          executionMethod = 'flatpak_steam';
+        } else {
+          dispatchedCommand = `steam "${steamUri}"`;
+          safeSpawnDetached('steam', [steamUri]);
+          executionMethod = 'native_steam';
+        }
+      } else if (isMac) {
+        dispatchedCommand = `open "${steamUri}"`;
+        safeSpawnDetached('open', [steamUri]);
+        executionMethod = 'mac_open';
+      } else if (isWindows) {
+        dispatchedCommand = `start ${steamUri}`;
+        safeSpawnDetached('cmd.exe', ['/c', 'start', steamUri]);
+        executionMethod = 'win_start';
+      }
+
+      return res.json({
+        success: true,
+        appId: Number(appId),
+        gameName: gameName || `App ${appId}`,
+        steamUri,
+        dispatchedCommand,
+        executionMethod,
+        message: `Dispatched launch command for ${gameName || `App ${appId}`} via ${steamUri}`,
+      });
+    } catch (err: any) {
+      console.error('Launch game error:', err);
+      return res.status(500).json({
+        success: false,
+        error: err.message || 'Failed to dispatch launch command',
+        steamUri: `steam://rungameid/${req.body?.appId}`,
+      });
+    }
+  });
+
+  // Helper to gather all plausible Steam userdata directories across Native, Flatpak, Snap, SteamOS, Windows, macOS
+  function getSteamUserDataPaths(): string[] {
+    const homeDir = os.homedir();
+    const candidatePaths = [
+      path.join(homeDir, '.local/share/Steam'),
+      path.join(homeDir, '.steam/steam'),
+      path.join(homeDir, '.steam/root'),
+      path.join(homeDir, '.steam/debian-installation'),
+      path.join(homeDir, '.var/app/com.valvesoftware.Steam/.local/share/Steam'),
+      path.join(homeDir, '.var/app/com.valvesoftware.Steam/data/Steam'),
+      path.join(homeDir, 'snap/steam/common/.local/share/Steam'),
+      path.join(homeDir, 'snap/steam/common/.steam/steam'),
+      '/home/deck/.local/share/Steam',
+      '/home/deck/.steam/steam',
+      '/home/deck/.var/app/com.valvesoftware.Steam/.local/share/Steam',
+      'C:\\Program Files (x86)\\Steam',
+      'C:\\Program Files\\Steam',
+      'D:\\Steam',
+      'E:\\Steam',
+      path.join(homeDir, 'Library/Application Support/Steam'),
+    ];
+
+    // Also check other user homes if accessible in Linux
+    if (os.platform() === 'linux') {
+      try {
+        if (fs.existsSync('/home')) {
+          const users = fs.readdirSync('/home');
+          for (const u of users) {
+            const userSteam = `/home/${u}/.local/share/Steam`;
+            if (!candidatePaths.includes(userSteam)) candidatePaths.push(userSteam);
+            const userFlatpak = `/home/${u}/.var/app/com.valvesoftware.Steam/.local/share/Steam`;
+            if (!candidatePaths.includes(userFlatpak)) candidatePaths.push(userFlatpak);
+          }
+        }
+      } catch {}
+    }
+
+    return candidatePaths;
   }
 
   // Steam Write Launch Options Endpoint (directly writes to localconfig.vdf on host)
   app.post('/api/steam/write-launch-options', (req, res) => {
     try {
-      const { appId, launchOptions, updates } = req.body;
-      const homeDir = os.homedir();
+      const { appId, launchOptions, updates, customPath } = req.body;
 
       const itemsToUpdate: Array<{ appId: string; launchOptions: string }> = [];
       if (updates && Array.isArray(updates)) {
@@ -664,22 +860,35 @@ Return ONLY valid JSON.`,
         return res.status(400).json({ error: 'No appId or launch options provided' });
       }
 
-      const possiblePaths = [
-        path.join(homeDir, '.local/share/Steam'),
-        path.join(homeDir, '.steam/steam'),
-        path.join(homeDir, '.steam/root'),
-        path.join(homeDir, '.var/app/com.valvesoftware.Steam/.local/share/Steam'),
-        '/home/deck/.local/share/Steam',
-        'C:\\Program Files (x86)\\Steam',
-        'C:\\Program Files\\Steam',
-        path.join(homeDir, 'Library/Application Support/Steam'),
-      ];
+      const possiblePaths = getSteamUserDataPaths();
+      if (customPath && typeof customPath === 'string' && customPath.trim()) {
+        possiblePaths.unshift(customPath.trim());
+      }
 
       const updatedFiles: string[] = [];
       const backupFiles: string[] = [];
 
       for (const basePath of possiblePaths) {
-        const userDataDir = path.join(basePath, 'userdata');
+        // If the path directly points to localconfig.vdf
+        if (basePath.endsWith('localconfig.vdf') && fs.existsSync(basePath)) {
+          try {
+            let vdfContent = fs.readFileSync(basePath, 'utf-8');
+            const backupPath = `${basePath}.bak`;
+            fs.writeFileSync(backupPath, vdfContent, 'utf-8');
+            backupFiles.push(backupPath);
+
+            for (const item of itemsToUpdate) {
+              vdfContent = updateLaunchOptionsInVdf(vdfContent, item.appId, item.launchOptions);
+            }
+            fs.writeFileSync(basePath, vdfContent, 'utf-8');
+            updatedFiles.push(basePath);
+          } catch (err) {
+            console.warn(`Error writing to custom localconfig.vdf at ${basePath}:`, err);
+          }
+          continue;
+        }
+
+        const userDataDir = basePath.endsWith('userdata') ? basePath : path.join(basePath, 'userdata');
         if (fs.existsSync(userDataDir)) {
           try {
             const userFolders = fs.readdirSync(userDataDir);
@@ -712,7 +921,7 @@ Return ONLY valid JSON.`,
       if (updatedFiles.length === 0) {
         return res.json({
           success: false,
-          message: 'No local Steam localconfig.vdf file was found on the default system paths. You can still export/download the .vdf file directly.',
+          message: 'No local Steam localconfig.vdf file was found on standard system paths. If running in a browser, you can sync via the browser File System dialog or export/download the updated .vdf file directly.',
           updatedFiles: [],
           backupFiles: [],
         });
@@ -735,24 +944,41 @@ Return ONLY valid JSON.`,
   app.get('/api/steam/read-launch-options', (req, res) => {
     try {
       const requestedAppId = req.query.appId ? String(req.query.appId) : null;
-      const homeDir = os.homedir();
+      const customPath = typeof req.query.customPath === 'string' ? req.query.customPath.trim() : null;
 
-      const possiblePaths = [
-        path.join(homeDir, '.local/share/Steam'),
-        path.join(homeDir, '.steam/steam'),
-        path.join(homeDir, '.steam/root'),
-        path.join(homeDir, '.var/app/com.valvesoftware.Steam/.local/share/Steam'),
-        '/home/deck/.local/share/Steam',
-        'C:\\Program Files (x86)\\Steam',
-        'C:\\Program Files\\Steam',
-        path.join(homeDir, 'Library/Application Support/Steam'),
-      ];
+      const possiblePaths = getSteamUserDataPaths();
+      if (customPath) {
+        possiblePaths.unshift(customPath);
+      }
 
       const launchOptionsMap: Record<string, string> = {};
       const readFiles: string[] = [];
 
       for (const basePath of possiblePaths) {
-        const userDataDir = path.join(basePath, 'userdata');
+        if (basePath.endsWith('localconfig.vdf') && fs.existsSync(basePath)) {
+          try {
+            const vdfText = fs.readFileSync(basePath, 'utf-8');
+            readFiles.push(basePath);
+
+            const appIdRegex = /"(\d+)"\s*\{([^}]*)\}/g;
+            let match;
+            while ((match = appIdRegex.exec(vdfText)) !== null) {
+              const appId = match[1];
+              const appBody = match[2];
+              if (!requestedAppId || requestedAppId === appId) {
+                const launchOptsMatch = appBody.match(/"LaunchOptions"\s*"([^"]*)"/i);
+                if (launchOptsMatch) {
+                  launchOptionsMap[appId] = launchOptsMatch[1];
+                }
+              }
+            }
+          } catch (err) {
+            console.warn(`Error reading custom localconfig.vdf at ${basePath}:`, err);
+          }
+          continue;
+        }
+
+        const userDataDir = basePath.endsWith('userdata') ? basePath : path.join(basePath, 'userdata');
         if (fs.existsSync(userDataDir)) {
           try {
             const userFolders = fs.readdirSync(userDataDir);
@@ -813,29 +1039,94 @@ Return ONLY valid JSON.`,
   // (Proton GE, Proton CachyOS, Proton EM, Proton DW)
   // ==========================================
 
-  // Known Proton runner repositories on GitHub
-  const RUNNER_REPOS: Record<string, { name: string; repo: string; desc: string; icon: string }> = {
+  // Helper to format byte counts human-readably (KB, MB, GB)
+  function formatBytesReadable(bytes: number): string {
+    if (!bytes || bytes <= 0) return 'Unknown size';
+    if (bytes < 1024 * 1024) {
+      return `${(bytes / 1024).toFixed(1)} KB`;
+    }
+    const mb = bytes / (1024 * 1024);
+    if (mb >= 1000) {
+      return `${(mb / 1024).toFixed(2)} GB`;
+    }
+    return `${mb.toFixed(1)} MB`;
+  }
+
+  // Recursive directory size calculation helper
+  function getDirectorySizeBytes(dirPath: string, maxDepth = 3, currentDepth = 0): number {
+    if (currentDepth > maxDepth) return 0;
+    let total = 0;
+    try {
+      const items = fs.readdirSync(dirPath, { withFileTypes: true });
+      for (const item of items) {
+        const full = path.join(dirPath, item.name);
+        if (item.isDirectory()) {
+          total += getDirectorySizeBytes(full, maxDepth, currentDepth + 1);
+        } else if (item.isFile()) {
+          try {
+            total += fs.statSync(full).size;
+          } catch {}
+        }
+      }
+    } catch {}
+    return total;
+  }
+
+  // Known Proton runner repositories on GitHub / Codeberg
+  const RUNNER_REPOS: Record<string, { name: string; repo: string; providerType?: 'github' | 'codeberg'; desc: string; icon: string }> = {
     ge: {
       name: 'GE-Proton (Proton GE)',
       repo: 'GloriousEggroll/proton-ge-custom',
+      providerType: 'github',
       desc: 'GloriousEggroll build with media codecs (MF/WMA), bleeding-edge Wine patches, and game fixes.',
       icon: '🔥',
     },
     cachyos: {
       name: 'Proton-CachyOS',
       repo: 'CachyOS/proton-cachyos',
+      providerType: 'github',
       desc: 'CachyOS optimized Proton with x86-64-v3/v4 compiler tweaks, LTO, and kernel sync patches.',
       icon: '⚡',
+    },
+    rtsp: {
+      name: 'Proton-RTSP (Livestream GStreamer Runner)',
+      repo: 'SpookySkeletons/proton-rtsp',
+      providerType: 'github',
+      desc: 'SpookySkeletons build with GStreamer RTSP/RTP/HLS video streaming pipeline for VRChat & AVPro media players.',
+      icon: '📹',
+    },
+    luxtorpeda: {
+      name: 'Luxtorpeda',
+      repo: 'luxtorpeda/luxtorpeda',
+      providerType: 'codeberg',
+      desc: 'Steam compatibility tool that enables running native Linux game engines for Windows/DOS games on Steam.',
+      icon: '🚀',
+    },
+    boxtron: {
+      name: 'Boxtron',
+      repo: 'dreamer/boxtron',
+      providerType: 'github',
+      desc: 'Steam compatibility tool to run DOS games natively using Linux DOSBox or DOSBox-Staging.',
+      icon: '📦',
+    },
+    roberta: {
+      name: 'Roberta',
+      repo: 'dreamer/roberta',
+      providerType: 'github',
+      desc: 'Steam compatibility tool to run adventure games natively using Linux ScummVM.',
+      icon: '📜',
     },
     em: {
       name: 'Proton-EM (Etaash Mathamsetty Proton)',
       repo: 'Etaash-mathamsetty/Proton',
+      providerType: 'github',
       desc: 'Proton-EM build by Etaash Mathamsetty with performance optimizations, custom Wine patches, and game fixes.',
       icon: '🐺',
     },
     dw: {
       name: 'Proton-DW / Wine-GE',
       repo: 'GloriousEggroll/wine-ge-custom',
+      providerType: 'github',
       desc: 'DirectWay / Wine-GE Proton variant optimized for standalone Wine, Direct3D, and Wayland games.',
       icon: '🛠️',
     },
@@ -889,16 +1180,57 @@ Return ONLY valid JSON.`,
     };
   }
 
+  // Extract filename stem without archive extension
+  function getAssetStem(filename: string): string {
+    let name = filename.toLowerCase();
+    const extensions = [
+      '.tar.zst', '.tar.xz', '.tar.gz', '.tar.bz2',
+      '.tzst', '.txz', '.tgz', '.tbz2',
+      '.zst', '.xz', '.gz', '.bz2',
+      '.tar', '.7z', '.zip'
+    ];
+    for (const ext of extensions) {
+      if (name.endsWith(ext)) {
+        return name.slice(0, -ext.length);
+      }
+    }
+    return name;
+  }
+
   // Score a release asset against the host architecture
   function scoreAssetForHost(assetName: string, hostInfo: ReturnType<typeof getHostArchitectureInfo>) {
     const name = assetName.toLowerCase();
+
+    const isChecksum = name.endsWith('.sha512') ||
+      name.endsWith('.sha512sum') ||
+      name.endsWith('.sha256') ||
+      name.endsWith('.sha256sum') ||
+      name.endsWith('.sha1') ||
+      name.endsWith('.sha1sum') ||
+      name.endsWith('.md5') ||
+      name.endsWith('.md5sum') ||
+      name.endsWith('.sig') ||
+      name.endsWith('.asc') ||
+      name.endsWith('.sum') ||
+      name.includes('sha512') ||
+      name.includes('sha256') ||
+      name.includes('md5sum') ||
+      name.includes('checksum');
+
+    if (isChecksum) {
+      return { score: -10000, archTag: 'checksum', isCompatible: false, isRecommended: false };
+    }
+
+    // Ignore .zip archives unless specifically desired (Steam compatibility tools use tarballs)
+    if (name.endsWith('.zip')) {
+      return { score: -10000, archTag: 'zip', isCompatible: false, isRecommended: false };
+    }
 
     const isArchive = name.endsWith('.tar.gz') ||
       name.endsWith('.tar.xz') ||
       name.endsWith('.tar.zst') ||
       name.endsWith('.tar.bz2') ||
       name.endsWith('.tar') ||
-      name.endsWith('.zip') ||
       name.endsWith('.7z') ||
       name.includes('.tar.');
 
@@ -924,6 +1256,17 @@ Return ONLY valid JSON.`,
     let score = 100;
     let isCompatible = true;
     let isRecommended = false;
+
+    // Compression format preferences (zst > xz > gz > bz2)
+    if (name.endsWith('.tar.zst') || name.endsWith('.zst') || name.endsWith('.tzst')) {
+      score += 80;
+    } else if (name.endsWith('.tar.xz') || name.endsWith('.xz') || name.endsWith('.txz')) {
+      score += 60;
+    } else if (name.endsWith('.tar.gz') || name.endsWith('.gz') || name.endsWith('.tgz')) {
+      score += 40;
+    } else if (name.endsWith('.tar.bz2') || name.endsWith('.bz2') || name.endsWith('.tbz2')) {
+      score += 20;
+    }
 
     if (hostInfo.isX64) {
       if (isArm || isRiscv || isLoong) {
@@ -973,24 +1316,40 @@ Return ONLY valid JSON.`,
     return { score, archTag, isCompatible, isRecommended };
   }
 
-  // Helper to query GitHub releases for a repo
+  // Helper to query GitHub / Codeberg releases for a repo
   async function fetchRepoReleases(repoOwnerAndName: string, providerKey: string, hostInfo: ReturnType<typeof getHostArchitectureInfo>) {
     try {
-      const res = await fetch(`https://api.github.com/repos/${repoOwnerAndName}/releases?per_page=8`, {
-        headers: {
-          'User-Agent': 'ProtonLaunchOptionsManager/1.0',
-          'Accept': 'application/vnd.github.v3+json',
-        },
-      });
+      const providerInfo = RUNNER_REPOS[providerKey];
+      const isCodeberg = providerInfo?.providerType === 'codeberg';
+      const apiUrl = isCodeberg
+        ? `https://codeberg.org/api/v1/repos/${repoOwnerAndName}/releases?limit=8`
+        : `https://api.github.com/repos/${repoOwnerAndName}/releases?per_page=8`;
+
+      const headers: Record<string, string> = {
+        'User-Agent': 'ProtonLaunchOptionsManager/1.0',
+        'Accept': 'application/json',
+      };
+      if (!isCodeberg) {
+        headers['Accept'] = 'application/vnd.github.v3+json';
+      }
+
+      const res = await fetch(apiUrl, { headers });
       if (!res.ok) {
-        console.warn(`GitHub API ${repoOwnerAndName} status: ${res.status}`);
+        console.warn(`Release API (${providerKey}: ${repoOwnerAndName}) status: ${res.status}`);
         return [];
       }
       const data = await res.json();
       if (!Array.isArray(data)) return [];
 
       return data.map((rel: any) => {
-        const rawAssets = rel.assets || [];
+        let rawAssets = rel.assets || [];
+
+        if (providerKey === 'boxtron') {
+          rawAssets = rawAssets.filter((a: any) => a.name && a.name.toLowerCase().startsWith('boxtron'));
+        } else if (providerKey === 'roberta') {
+          rawAssets = rawAssets.filter((a: any) => a.name && a.name.toLowerCase().startsWith('roberta'));
+        }
+
         const processedAssets = rawAssets
           .map((a: any) => {
             const evaluation = scoreAssetForHost(a.name, hostInfo);
@@ -1007,9 +1366,21 @@ Return ONLY valid JSON.`,
           })
           .filter((a: any) => a.score > -9000);
 
+        // Sort by score descending (so tar.zst and recommended archs come first)
         processedAssets.sort((a: any, b: any) => b.score - a.score);
 
-        const primaryAsset = processedAssets[0] || null;
+        // Deduplicate assets for the same build/stem, keeping the highest scoring format (e.g. tar.zst over tar.gz)
+        const seenStems = new Set<string>();
+        const deduplicatedAssets: typeof processedAssets = [];
+        for (const asset of processedAssets) {
+          const stemKey = `${getAssetStem(asset.name)}_${asset.archTag}`;
+          if (!seenStems.has(stemKey)) {
+            seenStems.add(stemKey);
+            deduplicatedAssets.push(asset);
+          }
+        }
+
+        const primaryAsset = deduplicatedAssets[0] || null;
 
         return {
           id: rel.id,
@@ -1019,12 +1390,12 @@ Return ONLY valid JSON.`,
           title: rel.name || rel.tag_name,
           publishedAt: rel.published_at,
           body: rel.body || '',
-          htmlUrl: rel.html_url,
+          htmlUrl: rel.html_url || (isCodeberg ? `https://codeberg.org/${repoOwnerAndName}/releases/tag/${rel.tag_name}` : `https://github.com/${repoOwnerAndName}/releases/tag/${rel.tag_name}`),
           repo: repoOwnerAndName,
           asset: primaryAsset,
-          allAssets: processedAssets,
+          allAssets: deduplicatedAssets,
         };
-      });
+      }).filter((rel: any) => rel.asset && rel.asset.downloadUrl && rel.allAssets && rel.allAssets.length > 0);
     } catch (err) {
       console.error(`Error fetching releases for ${repoOwnerAndName}:`, err);
       return [];
@@ -1108,12 +1479,7 @@ Return ONLY valid JSON.`,
                   } catch {}
                 }
 
-                let totalSizeBytes = 0;
-                try {
-                  const files = fs.readdirSync(fullPath);
-                  totalSizeBytes = files.length * 1024 * 512;
-                } catch {}
-
+                let totalSizeBytes = getDirectorySizeBytes(fullPath);
                 const stat = fs.statSync(fullPath);
 
                 if (!installedRunners.some(r => r.displayTitle.toLowerCase() === displayTitle.toLowerCase())) {
@@ -1122,7 +1488,8 @@ Return ONLY valid JSON.`,
                     displayTitle,
                     fullPath,
                     modifiedTime: stat.mtime,
-                    approxSizeMb: Math.max(120, Math.round(totalSizeBytes / (1024 * 1024))),
+                    approxSizeMb: Math.round(totalSizeBytes / (1024 * 1024)),
+                    approxSizeFormatted: formatBytesReadable(totalSizeBytes),
                     source: 'compatibilitytools.d',
                   });
                 }
@@ -1293,12 +1660,12 @@ Return ONLY valid JSON.`,
 
       const contentLengthHeader = downloadRes.headers.get('content-length');
       const totalBytes = contentLengthHeader ? parseInt(contentLengthHeader, 10) : 0;
-      const totalMbStr = totalBytes > 0 ? (totalBytes / (1024 * 1024)).toFixed(1) : undefined;
+      const totalMbStr = totalBytes > 0 ? formatBytesReadable(totalBytes) : undefined;
 
       sendProgress({
         percent: 5,
         stage: 'downloading',
-        message: `Starting download: ${safeFileName} (${totalMbStr ? totalMbStr + ' MB' : 'Unknown size'})...`,
+        message: `Starting download: ${safeFileName} (${totalMbStr || 'Unknown size'})...`,
         totalMb: totalMbStr,
       });
 
@@ -1318,7 +1685,7 @@ Return ONLY valid JSON.`,
         const now = Date.now();
         if (now - lastReportTime > 150) {
           lastReportTime = now;
-          const dlMb = (receivedBytes / (1024 * 1024)).toFixed(1);
+          const dlMb = formatBytesReadable(receivedBytes);
           let pct = 5;
           if (totalBytes > 0) {
             pct = Math.min(75, 5 + Math.round((receivedBytes / totalBytes) * 70));
@@ -1329,7 +1696,7 @@ Return ONLY valid JSON.`,
           sendProgress({
             percent: pct,
             stage: 'downloading',
-            message: `Downloading archive: ${dlMb} MB ${totalMbStr ? '/ ' + totalMbStr + ' MB' : ''} (${pct}%)`,
+            message: `Downloading archive: ${dlMb} ${totalMbStr ? '/ ' + totalMbStr : ''} (${pct}%)`,
             downloadedMb: dlMb,
             totalMb: totalMbStr,
           });
