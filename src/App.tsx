@@ -17,10 +17,11 @@ import { ProtonManagerModal } from './components/ProtonManagerModal';
 import { BackupModal } from './components/BackupModal';
 import { SteamGridDbModal } from './components/SteamGridDbModal';
 import { DirectSteamLauncherModal } from './components/DirectSteamLauncherModal';
+import { WriteToSteamModal } from './components/WriteToSteamModal';
 import { ProtonVersionSelector } from './components/ProtonVersionSelector';
 import { PROTON_FLAGS } from './data/protonFlagsData';
 import { launchSteamGame } from './utils/steamLauncher';
-import { Sparkles, Terminal, Gamepad2, ShieldCheck, CheckCircle2, MessageSquareQuote, Image as ImageIcon, Rocket } from 'lucide-react';
+import { Sparkles, Terminal, Gamepad2, ShieldCheck, CheckCircle2, AlertCircle, Info, MessageSquareQuote, Image as ImageIcon, Rocket, HardDrive } from 'lucide-react';
 
 export default function App() {
   const [games, setGames] = useState<SteamGame[]>(INITIAL_STEAM_GAMES);
@@ -76,6 +77,7 @@ export default function App() {
   const [isBackupOpen, setIsBackupOpen] = useState(false);
   const [isSteamGridDbOpen, setIsSteamGridDbOpen] = useState(false);
   const [isSteamLauncherOpen, setIsSteamLauncherOpen] = useState(false);
+  const [isWriteToSteamOpen, setIsWriteToSteamOpen] = useState(false);
 
   // Restore games from JSON backup
   const handleImportBackupGames = (importedGames: SteamGame[]) => {
@@ -163,11 +165,11 @@ export default function App() {
   };
 
   // Toast notification state
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
+  const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToast({ message: msg, type });
+    setTimeout(() => setToast(null), 3500);
   };
 
   // Switch selected game and reset form state to game's stored launch options
@@ -264,6 +266,8 @@ export default function App() {
         setIsProtonManagerOpen(false);
         setIsBackupOpen(false);
         setIsSteamGridDbOpen(false);
+        setIsSteamLauncherOpen(false);
+        setIsWriteToSteamOpen(false);
       }
     };
 
@@ -344,10 +348,20 @@ export default function App() {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-slate-950">
       
       {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-5 right-5 z-50 bg-cyan-600 text-white px-4 py-2.5 rounded-xl shadow-2xl border border-cyan-400/40 flex items-center space-x-2 animate-bounce text-xs font-semibold">
-          <CheckCircle2 className="w-4 h-4 text-cyan-200" />
-          <span>{toastMessage}</span>
+      {toast && (
+        <div
+          className={`fixed bottom-5 right-5 z-50 px-4 py-2.5 rounded-xl shadow-2xl border flex items-center space-x-2 text-xs font-semibold animate-bounce ${
+            toast.type === 'success'
+              ? 'bg-emerald-600 border-emerald-400 text-white shadow-emerald-950/50'
+              : toast.type === 'error'
+              ? 'bg-amber-600 border-amber-400 text-white shadow-amber-950/50'
+              : 'bg-cyan-600 border-cyan-400 text-white shadow-cyan-950/50'
+          }`}
+        >
+          {toast.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-100" />}
+          {toast.type === 'error' && <AlertCircle className="w-4 h-4 text-amber-100" />}
+          {toast.type === 'info' && <Info className="w-4 h-4 text-cyan-100" />}
+          <span>{toast.message}</span>
         </div>
       )}
 
@@ -449,6 +463,14 @@ export default function App() {
 
             <div className="flex items-center space-x-2">
               <button
+                onClick={() => setIsWriteToSteamOpen(true)}
+                className="bg-cyan-600 hover:bg-cyan-500 text-white font-bold px-3 py-1.5 rounded-xl text-xs flex items-center space-x-1.5 transition shadow-sm"
+                title="Write & sync launch options directly to Steam localconfig.vdf"
+              >
+                <HardDrive className="w-3.5 h-3.5" />
+                <span>Write to Steam</span>
+              </button>
+              <button
                 onClick={() => setIsSteamLauncherOpen(true)}
                 className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold px-3 py-1.5 rounded-xl text-xs flex items-center space-x-1.5 transition shadow-sm"
                 title="Launch game via Steam client or export launcher shortcuts"
@@ -489,7 +511,8 @@ export default function App() {
             selectedGame={selectedGame}
             onApplyCommand={handleApplyCommandToGame}
             activeFlagNames={activeFlagNames}
-            onWriteToSteamNotice={(msg) => showToast(msg)}
+            onWriteToSteamNotice={(msg, isSuccess) => showToast(msg, isSuccess ? 'success' : 'error')}
+            onOpenWriteToSteamModal={() => setIsWriteToSteamOpen(true)}
           />
 
           {/* Proton Flag Checklist Component */}
@@ -508,6 +531,16 @@ export default function App() {
       </main>
 
       {/* Modals */}
+      <WriteToSteamModal
+        isOpen={isWriteToSteamOpen}
+        onClose={() => setIsWriteToSteamOpen(false)}
+        game={selectedGame}
+        launchOptions={currentCommandString}
+        allGames={games}
+        onGameUpdated={(updated) => handleApplyCommandToGame(updated.currentLaunchOptions)}
+        showToast={showToast}
+      />
+
       <CCodeGeneratorModal
         isOpen={isCCodeOpen}
         onClose={() => setIsCCodeOpen(false)}

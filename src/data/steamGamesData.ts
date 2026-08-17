@@ -104,7 +104,7 @@ export const INITIAL_STEAM_GAMES: SteamGame[] = [
     bannerUrl: 'https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/2322010/header.jpg',
     iconUrl: 'https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/2322010/library_600x900_2x.jpg',
     protonVersion: 'Proton Experimental',
-    currentLaunchOptions: 'PROTON_ENABLE_NVAPI=1 PROTON_USE_NTSYNC=1 VKD3D_CONFIG=dxr11,dxr gamemoderun %command%',
+    currentLaunchOptions: 'PROTON_ENABLE_NVAPI=1 PROTON_USE_NTSYNC=1 gamemoderun %command%',
     lastUpdated: '2026-07-21 20:15',
     installDate: 1784664900000,
     releaseDate: '2024-09-19',

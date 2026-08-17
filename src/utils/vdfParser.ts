@@ -125,43 +125,114 @@ export function parseLocalConfigVdf(vdfText: string): VdfAppConfig[] {
   return results;
 }
 
+export function findMatchingBraceIndex(text: string, openBraceIndex: number): number {
+  let depth = 0;
+  let inString = false;
+  let escapeNext = false;
+
+  for (let i = openBraceIndex; i < text.length; i++) {
+    const char = text[i];
+
+    if (escapeNext) {
+      escapeNext = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      escapeNext = true;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (!inString) {
+      if (char === '{') {
+        depth++;
+      } else if (char === '}') {
+        depth--;
+        if (depth === 0) {
+          return i;
+        }
+      }
+    }
+  }
+
+  return -1;
+}
+
 export function updateVdfLaunchOptions(
   vdfText: string,
   appId: string,
   newLaunchOptions: string
 ): string {
-  const appIdStr = `"${appId}"`;
-  const appPos = vdfText.indexOf(appIdStr);
+  if (!vdfText) {
+    return generateSampleVdf([{ appId: Number(appId), currentLaunchOptions: newLaunchOptions, name: `App ${appId}` }]);
+  }
 
-  if (appPos === -1) {
-    // If AppID block doesn't exist, append inside "apps" section
-    const appsIdx = vdfText.indexOf('"apps"');
-    if (appsIdx !== -1) {
-      const openBraceIdx = vdfText.indexOf('{', appsIdx);
-      if (openBraceIdx !== -1) {
-        const newBlock = `\n\t\t"${appId}"\n\t\t{\n\t\t\t"LaunchOptions"\t\t"${newLaunchOptions}"\n\t\t}`;
-        return vdfText.slice(0, openBraceIdx + 1) + newBlock + vdfText.slice(openBraceIdx + 1);
+  const escapedOpts = newLaunchOptions.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  const appIdQuoted = `"${appId}"`;
+
+  // Search for the specific app ID block inside the VDF
+  let searchPos = 0;
+  let appFoundIndex = -1;
+
+  while (true) {
+    const idx = vdfText.indexOf(appIdQuoted, searchPos);
+    if (idx === -1) break;
+
+    // Verify this is a key token (followed by whitespace and '{')
+    const afterApp = vdfText.slice(idx + appIdQuoted.length);
+    const braceMatch = afterApp.match(/^\s*\{/);
+    if (braceMatch) {
+      appFoundIndex = idx;
+      break;
+    }
+    searchPos = idx + appIdQuoted.length;
+  }
+
+  if (appFoundIndex !== -1) {
+    // Found existing appId block! Find its open and closing brace
+    const openBraceIdx = vdfText.indexOf('{', appFoundIndex);
+    if (openBraceIdx !== -1) {
+      const closeBraceIdx = findMatchingBraceIndex(vdfText, openBraceIdx);
+      if (closeBraceIdx !== -1) {
+        const appBody = vdfText.slice(openBraceIdx + 1, closeBraceIdx);
+        
+        // Check if LaunchOptions already exists in this app block
+        const launchOptsRegex = /("LaunchOptions"\s*")[^"]*(")/i;
+        if (launchOptsRegex.test(appBody)) {
+          const updatedBody = appBody.replace(launchOptsRegex, `$1${escapedOpts}$2`);
+          return vdfText.slice(0, openBraceIdx + 1) + updatedBody + vdfText.slice(closeBraceIdx);
+        } else {
+          // Insert LaunchOptions right at start of app block
+          const insertContent = `\n\t\t\t\t\t"LaunchOptions"\t\t"${escapedOpts}"`;
+          return vdfText.slice(0, openBraceIdx + 1) + insertContent + vdfText.slice(openBraceIdx + 1);
+        }
       }
     }
-    return vdfText;
   }
 
-  // Find LaunchOptions inside this app block
-  const blockEnd = vdfText.indexOf('}', appPos);
-  const appSub = vdfText.slice(appPos, blockEnd + 1);
-
-  if (appSub.includes('"LaunchOptions"')) {
-    const updatedSub = appSub.replace(
-      /"LaunchOptions"\s*"[^"]*"/i,
-      `"LaunchOptions"\t\t"${newLaunchOptions}"`
-    );
-    return vdfText.slice(0, appPos) + updatedSub + vdfText.slice(blockEnd + 1);
-  } else {
-    // Insert LaunchOptions before closing brace
-    const insertPos = blockEnd;
-    const newEntry = `\t\t\t"LaunchOptions"\t\t"${newLaunchOptions}"\n\t\t`;
-    return vdfText.slice(0, insertPos) + newEntry + vdfText.slice(insertPos);
+  // If app block doesn't exist, locate "apps" block and insert it
+  const appsIdx = vdfText.search(/"apps"\s*\{/i);
+  if (appsIdx !== -1) {
+    const openBraceIdx = vdfText.indexOf('{', appsIdx);
+    if (openBraceIdx !== -1) {
+      const newAppBlock = `\n\t\t\t\t"${appId}"\n\t\t\t\t{\n\t\t\t\t\t"LaunchOptions"\t\t"${escapedOpts}"\n\t\t\t\t}`;
+      return vdfText.slice(0, openBraceIdx + 1) + newAppBlock + vdfText.slice(openBraceIdx + 1);
+    }
   }
+
+  // Fallback: If no apps block exists, append before last closing brace or construct new
+  const lastBraceIdx = vdfText.lastIndexOf('}');
+  if (lastBraceIdx !== -1) {
+    const appBlockStr = `\n\t"apps"\n\t{\n\t\t"${appId}"\n\t\t{\n\t\t\t"LaunchOptions"\t\t"${escapedOpts}"\n\t\t}\n\t}\n`;
+    return vdfText.slice(0, lastBraceIdx) + appBlockStr + vdfText.slice(lastBraceIdx);
+  }
+
+  return generateSampleVdf([{ appId: Number(appId), currentLaunchOptions: newLaunchOptions, name: `App ${appId}` }]);
 }
 
 export function generateSampleVdf(games: Array<{ appId: number; currentLaunchOptions: string; name: string }>): string {

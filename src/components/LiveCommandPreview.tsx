@@ -28,6 +28,7 @@ interface LiveCommandPreviewProps {
   onWriteToSteamNotice?: (message: string, isSuccess: boolean) => void;
   onReadFromSteamSuccess?: (launchOptions: string) => void;
   onOpenSteamLauncher?: () => void;
+  onOpenWriteToSteamModal?: () => void;
 }
 
 export const LiveCommandPreview: React.FC<LiveCommandPreviewProps> = ({
@@ -38,6 +39,7 @@ export const LiveCommandPreview: React.FC<LiveCommandPreviewProps> = ({
   onWriteToSteamNotice,
   onReadFromSteamSuccess,
   onOpenSteamLauncher,
+  onOpenWriteToSteamModal,
 }) => {
   const [copied, setCopied] = useState(false);
   const [applied, setApplied] = useState(false);
@@ -72,6 +74,16 @@ export const LiveCommandPreview: React.FC<LiveCommandPreviewProps> = ({
   };
 
   const handleWriteToSteam = async () => {
+    // 1. Immediately apply & save to game in library state
+    onApplyCommand(commandString);
+
+    // 2. If dedicated modal handler provided, trigger full interactive write & sync hub
+    if (onOpenWriteToSteamModal) {
+      onOpenWriteToSteamModal();
+      return;
+    }
+
+    // Fallback: direct API call
     setWritingSteam(true);
     try {
       const res = await fetch('/api/steam/write-launch-options', {
