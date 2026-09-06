@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { getCCodeTemplates } from '../data/cCodeTemplates';
 import { SteamGame } from '../types';
+import { PROTON_FLAGS } from '../data/protonFlagsData';
 import JSZip from 'jszip';
 import { downloadTarZstdProject } from '../utils/tarZstdPacker';
 import { 
@@ -159,6 +160,9 @@ export const CCodeGeneratorModal: React.FC<CCodeGeneratorModalProps> = ({
                 </h2>
                 <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-mono px-2 py-0.5 rounded-full font-semibold">
                   100% Offline C99 / Pure Libc + GTK3
+                </span>
+                <span className="bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 text-[11px] font-mono px-2 py-0.5 rounded-full font-semibold">
+                  {PROTON_FLAGS.length} Flags & Wrappers
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">

@@ -1434,6 +1434,192 @@ Return ONLY valid JSON.`,
     }
   });
 
+  // Rescan runner GitHub repositories for new Proton & runtime environment flags
+  app.get('/api/proton-runners/scan-flags', async (req, res) => {
+    try {
+      const runnerSources = [
+        {
+          id: 'valve-proton-9',
+          name: 'Valve Proton 9.0',
+          repo: 'ValveSoftware/Proton',
+          branch: 'proton_9.0',
+          file: 'proton',
+          url: 'https://raw.githubusercontent.com/ValveSoftware/Proton/proton_9.0/proton',
+          webUrl: 'https://github.com/ValveSoftware/Proton/tree/proton_9.0',
+          icon: '🎮',
+        },
+        {
+          id: 'valve-proton-master',
+          name: 'Valve Proton (Bleeding-Edge / Next)',
+          repo: 'ValveSoftware/Proton',
+          branch: 'master',
+          file: 'proton',
+          url: 'https://raw.githubusercontent.com/ValveSoftware/Proton/master/proton',
+          webUrl: 'https://github.com/ValveSoftware/Proton',
+          icon: '⚡',
+        },
+        {
+          id: 'ge-proton',
+          name: 'GE-Proton (GloriousEggroll)',
+          repo: 'GloriousEggroll/proton-ge-custom',
+          branch: 'master',
+          file: 'proton',
+          url: 'https://raw.githubusercontent.com/GloriousEggroll/proton-ge-custom/master/proton',
+          webUrl: 'https://github.com/GloriousEggroll/proton-ge-custom',
+          icon: '🔥',
+        },
+        {
+          id: 'proton-cachyos',
+          name: 'Proton-CachyOS',
+          repo: 'CachyOS/proton-cachyos',
+          branch: 'cachyos_10.0_20250623/main',
+          file: 'proton',
+          url: 'https://raw.githubusercontent.com/CachyOS/proton-cachyos/cachyos_10.0_20250623/main/proton',
+          webUrl: 'https://github.com/CachyOS/proton-cachyos',
+          icon: '🚀',
+        },
+        {
+          id: 'proton-em',
+          name: 'Proton-EM (Etaash Mathamsetty)',
+          repo: 'Etaash-mathamsetty/Proton',
+          branch: 'master',
+          file: 'proton',
+          url: 'https://raw.githubusercontent.com/Etaash-mathamsetty/Proton/master/proton',
+          webUrl: 'https://github.com/Etaash-mathamsetty/Proton',
+          icon: '🐺',
+        },
+        {
+          id: 'proton-rtsp',
+          name: 'Proton-RTSP (SpookySkeletons)',
+          repo: 'SpookySkeletons/proton-rtsp',
+          branch: 'master',
+          file: 'README.md',
+          url: 'https://raw.githubusercontent.com/SpookySkeletons/proton-rtsp/master/README.md',
+          webUrl: 'https://github.com/SpookySkeletons/proton-rtsp',
+          icon: '📹',
+        },
+        {
+          id: 'umu-launcher',
+          name: 'UMU Unified Wine Launcher',
+          repo: 'Open-Wine-Components/umu-launcher',
+          branch: 'main',
+          file: 'README.md',
+          url: 'https://raw.githubusercontent.com/Open-Wine-Components/umu-launcher/main/README.md',
+          webUrl: 'https://github.com/Open-Wine-Components/umu-launcher',
+          icon: '🍷',
+        },
+        {
+          id: 'vkd3d-proton',
+          name: 'VKD3D-Proton (Direct3D 12)',
+          repo: 'HansKristian-Work/vkd3d-proton',
+          branch: 'master',
+          file: 'README.md',
+          url: 'https://raw.githubusercontent.com/HansKristian-Work/vkd3d-proton/master/README.md',
+          webUrl: 'https://github.com/HansKristian-Work/vkd3d-proton',
+          icon: '⚡',
+        },
+        {
+          id: 'dxvk',
+          name: 'DXVK (Direct3D 9/10/11)',
+          repo: 'doitsujin/dxvk',
+          branch: 'master',
+          file: 'README.md',
+          url: 'https://raw.githubusercontent.com/doitsujin/dxvk/master/README.md',
+          webUrl: 'https://github.com/doitsujin/dxvk',
+          icon: '🛡️',
+        },
+      ];
+
+      const scanPromises = runnerSources.map(async (source) => {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+          const resp = await fetch(source.url, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (ProtonLaunchOptionsManager/1.0)',
+              'Accept': 'text/plain,application/json,*/*',
+            },
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+
+          if (!resp.ok) {
+            return {
+              ...source,
+              status: 'error',
+              httpStatus: resp.status,
+              flagsCount: 0,
+              flags: [],
+              error: `HTTP ${resp.status} ${resp.statusText}`,
+            };
+          }
+
+          const text = await resp.text();
+          // Extract known flag prefixes
+          const matched = text.match(/\b(?:PROTON|WINE|DXVK|VKD3D|RADV|GST|UMU|LOW_LATENCY_LAYER)_[A-Z0-9_]+\b/g);
+          const flagMatches: string[] = matched ? Array.from(matched) : [];
+          
+          // Special runtime wrappers and commands
+          const extraPatterns = [
+            'gamemoderun', 'game-performance', 'gamescope', 'mangohud', 
+            'obs-gamecapture', 'pyroveil', 'vkbasalt', 'DXVK_NVAPI_VKREFLEX',
+            'ENABLE_LSFG', 'ENABLE_VKBASALT', 'DISABLE_SHADER_CACHE'
+          ];
+          for (const pattern of extraPatterns) {
+            if (text.includes(pattern)) {
+              flagMatches.push(pattern);
+            }
+          }
+
+          // Deduplicate and filter out internal noise
+          const uniqueFlags = Array.from(new Set(flagMatches)).filter(f => 
+            f.length >= 4 && 
+            !f.endsWith('_H') && 
+            !f.endsWith('_CPP') && 
+            !f.startsWith('PROTON_DIR') &&
+            !f.startsWith('PROTON_DIST')
+          ).sort();
+
+          return {
+            ...source,
+            status: 'ok',
+            httpStatus: 200,
+            flagsCount: uniqueFlags.length,
+            flags: uniqueFlags,
+          };
+        } catch (err: any) {
+          return {
+            ...source,
+            status: 'error',
+            httpStatus: 0,
+            flagsCount: 0,
+            flags: [],
+            error: err.message || 'Connection failed',
+          };
+        }
+      });
+
+      const scanResults = await Promise.all(scanPromises);
+
+      // Collect union of all discovered unique flags across all runners
+      const allUniqueDiscovered = Array.from(new Set(scanResults.flatMap(r => r.flags))).sort();
+
+      return res.json({
+        success: true,
+        scannedAt: new Date().toISOString(),
+        totalSourcesScanned: runnerSources.length,
+        successfulSources: scanResults.filter(r => r.status === 'ok').length,
+        totalUniqueFlags: allUniqueDiscovered.length,
+        discoveredFlags: allUniqueDiscovered,
+        runnerSources: scanResults,
+      });
+    } catch (err: any) {
+      console.error('Runner scan API error:', err);
+      return res.status(500).json({ error: 'Failed scanning runner repositories' });
+    }
+  });
+
   // Scan installed Proton compatibility tools on disk (both compatibilitytools.d and steamapps/common)
   app.get('/api/proton-runners/installed', (req, res) => {
     try {

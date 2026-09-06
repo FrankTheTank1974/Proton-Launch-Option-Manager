@@ -18,13 +18,21 @@ import {
   FolderArchive,
   PackageCheck,
   Loader2,
-  XCircle
+  XCircle,
+  Copy,
+  Check,
+  Search,
+  Code,
+  GitBranch
 } from 'lucide-react';
+import { PROTON_FLAGS } from '../data/protonFlagsData';
 
 interface ProtonManagerModalProps {
   isOpen: boolean;
   onClose: () => void;
   showToast?: (msg: string) => void;
+  initialTab?: 'releases' | 'installed' | 'flags-scan';
+  onSelectFlagToSearch?: (flagKey: string) => void;
 }
 
 interface ReleaseAsset {
@@ -88,8 +96,10 @@ export const ProtonManagerModal: React.FC<ProtonManagerModalProps> = ({
   isOpen,
   onClose,
   showToast,
+  initialTab = 'releases',
+  onSelectFlagToSearch,
 }) => {
-  const [activeTab, setActiveTab] = useState<'releases' | 'installed'>('releases');
+  const [activeTab, setActiveTab] = useState<'releases' | 'installed' | 'flags-scan'>('releases');
   const [providerFilter, setProviderFilter] = useState<string>('all');
   const [releases, setReleases] = useState<ProtonRelease[]>([]);
   const [hostSystem, setHostSystem] = useState<HostSystemInfo | null>(null);
@@ -105,6 +115,57 @@ export const ProtonManagerModal: React.FC<ProtonManagerModalProps> = ({
   const [expandedReleaseId, setExpandedReleaseId] = useState<string | number | null>(null);
   
   const [statusMessage, setStatusMessage] = useState<{ text: string; isError?: boolean } | null>(null);
+
+  // Flag Scan State
+  const [flagScanResults, setFlagScanResults] = useState<{
+    success: boolean;
+    totalUniqueFlags: number;
+    sourcesScanned: Array<{
+      id: string;
+      name: string;
+      url: string;
+      branch: string;
+      status: number;
+      flagsFound: number;
+    }>;
+    discoveredFlags: Array<{
+      key: string;
+      sources: string[];
+      count: number;
+    }>;
+    scannedAt: string;
+  } | null>(null);
+  const [loadingFlagScan, setLoadingFlagScan] = useState<boolean>(false);
+  const [flagFilterText, setFlagFilterText] = useState<string>('');
+  const [flagPrefixFilter, setFlagPrefixFilter] = useState<string>('all');
+  const [copiedFlag, setCopiedFlag] = useState<string | null>(null);
+
+  const handleCopyFlag = (key: string) => {
+    navigator.clipboard.writeText(`${key}=1`);
+    setCopiedFlag(key);
+    showToast?.(`Copied ${key}=1 to clipboard`);
+    setTimeout(() => setCopiedFlag(null), 2000);
+  };
+
+  // Trigger live scan of runner GitHub repos
+  const handleTriggerFlagScan = async () => {
+    setLoadingFlagScan(true);
+    try {
+      const res = await fetch('/api/proton-runners/scan-flags');
+      const data = await res.json();
+      if (data.success) {
+        setFlagScanResults(data);
+        showToast?.(`Found ${data.totalUniqueFlags} flags across ${data.sourcesScanned.length} runner repositories!`);
+      } else {
+        setStatusMessage({ text: 'Error scanning runner flags from GitHub.', isError: true });
+      }
+    } catch (err) {
+      console.error('Failed scanning runner flags:', err);
+      setStatusMessage({ text: 'Failed connecting to runner flag scan endpoint.', isError: true });
+    } finally {
+      setLoadingFlagScan(false);
+    }
+  };
 
   // Fetch installed runners
   const fetchInstalled = async () => {
@@ -148,10 +209,16 @@ export const ProtonManagerModal: React.FC<ProtonManagerModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
+      if (initialTab) {
+        setActiveTab(initialTab);
+      }
       fetchInstalled();
       fetchReleases(providerFilter);
+      if (initialTab === 'flags-scan' || !flagScanResults) {
+        handleTriggerFlagScan();
+      }
     }
-  }, [isOpen, providerFilter]);
+  }, [isOpen, initialTab, providerFilter]);
 
   if (!isOpen) return null;
 
@@ -441,17 +508,46 @@ export const ProtonManagerModal: React.FC<ProtonManagerModalProps> = ({
               <FolderCheck className="w-3.5 h-3.5 text-cyan-400" />
               <span>Installed Tools ({installedRunners.length})</span>
             </button>
+
+            <button
+              onClick={() => {
+                setActiveTab('flags-scan');
+                if (!flagScanResults) {
+                  handleTriggerFlagScan();
+                }
+              }}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1.5 ${
+                activeTab === 'flags-scan'
+                  ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+              <span>Runner Flag Scanner</span>
+              {flagScanResults && (
+                <span className="bg-purple-950 text-purple-300 text-[10px] px-1.5 py-0.2 rounded-full border border-purple-800 font-mono">
+                  {flagScanResults.totalUniqueFlags}
+                </span>
+              )}
+            </button>
           </div>
 
           {/* Refresh Buttons */}
           <div className="flex items-center space-x-2">
             <button
-              onClick={() => { fetchReleases(providerFilter); fetchInstalled(); }}
+              onClick={() => {
+                if (activeTab === 'flags-scan') {
+                  handleTriggerFlagScan();
+                } else {
+                  fetchReleases(providerFilter);
+                  fetchInstalled();
+                }
+              }}
               className="p-1.5 text-slate-400 hover:text-slate-200 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs transition flex items-center space-x-1"
-              title="Refresh release lists and disk scan"
+              title={activeTab === 'flags-scan' ? 'Rescan runner repositories on GitHub' : 'Refresh release lists and disk scan'}
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loadingReleases || loadingInstalled ? 'animate-spin text-amber-400' : ''}`} />
-              <span className="text-xs">Refresh</span>
+              <RefreshCw className={`w-3.5 h-3.5 ${loadingReleases || loadingInstalled || loadingFlagScan ? 'animate-spin text-amber-400' : ''}`} />
+              <span className="text-xs">{activeTab === 'flags-scan' ? 'Rescan GitHub' : 'Refresh'}</span>
             </button>
           </div>
         </div>
@@ -770,6 +866,313 @@ export const ProtonManagerModal: React.FC<ProtonManagerModalProps> = ({
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* TAB 3: RUNNER FLAGS LIVE GITHUB SCANNER */}
+          {activeTab === 'flags-scan' && (
+            <div className="p-6 space-y-6">
+              
+              {/* Header Hero Banner */}
+              <div className="bg-gradient-to-r from-purple-950/40 via-slate-950 to-slate-900 border border-purple-800/40 rounded-2xl p-5 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="flex items-start space-x-3.5">
+                  <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-xl text-purple-400 shrink-0">
+                    <Sparkles className="w-6 h-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center space-x-2">
+                      <h3 className="text-base font-bold text-slate-100">Runner Repositories GitHub Live Flag Scanner</h3>
+                      <span className="bg-purple-500/10 text-purple-300 border border-purple-500/30 text-[10px] font-mono px-2 py-0.5 rounded-full font-semibold">
+                        Automated Upstream Sync
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
+                      Scans remote launcher scripts, environment variable tables, and documentation across Valve Proton, GE-Proton, Proton-CachyOS, Proton-EM, Proton-RTSP, UMU, VKD3D-Proton, and DXVK.
+                    </p>
+                    {flagScanResults?.scannedAt && (
+                      <p className="text-[11px] text-slate-500 font-mono">
+                        Last scanned: {new Date(flagScanResults.scannedAt).toLocaleTimeString()} ({new Date(flagScanResults.scannedAt).toLocaleDateString()})
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleTriggerFlagScan}
+                  disabled={loadingFlagScan}
+                  className="px-4 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:bg-purple-800/50 text-white text-xs font-bold rounded-xl transition shadow-md flex items-center space-x-2 shrink-0 self-end md:self-center"
+                >
+                  <RefreshCw className={`w-4 h-4 ${loadingFlagScan ? 'animate-spin' : ''}`} />
+                  <span>{loadingFlagScan ? 'Scanning GitHub Repos...' : 'Rescan GitHub Pages'}</span>
+                </button>
+              </div>
+
+              {/* Summary Stats Badges */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 flex items-center space-x-3">
+                  <div className="p-2 bg-cyan-500/10 border border-cyan-500/20 rounded-lg text-cyan-400">
+                    <Code className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-lg font-bold font-mono text-cyan-300">
+                      {flagScanResults?.totalUniqueFlags || 0}
+                    </div>
+                    <div className="text-xs text-slate-400 font-medium">Discovered Runner Flags</div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 flex items-center space-x-3">
+                  <div className="p-2 bg-purple-500/10 border border-purple-500/20 rounded-lg text-purple-400">
+                    <GitBranch className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-lg font-bold font-mono text-purple-300">
+                      {flagScanResults?.sourcesScanned?.length || 0} Repositories
+                    </div>
+                    <div className="text-xs text-slate-400 font-medium">Upstream Sources Scanned</div>
+                  </div>
+                </div>
+
+                <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 flex items-center space-x-3">
+                  <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-400">
+                    <CheckCircle2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-lg font-bold font-mono text-emerald-300">
+                      {PROTON_FLAGS.length} Flags
+                    </div>
+                    <div className="text-xs text-slate-400 font-medium">Synced in App Database</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Scanned Upstream Sources Strip / Grid */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <GitBranch className="w-3.5 h-3.5 text-purple-400" />
+                    Upstream Runner Sources ({flagScanResults?.sourcesScanned?.length || 0})
+                  </h4>
+                  <span className="text-[11px] text-slate-500">Live HTTP Fetch with Auto-Regex Extraction</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                  {flagScanResults?.sourcesScanned?.map((src) => (
+                    <div
+                      key={src.id}
+                      className="bg-slate-950/80 border border-slate-800 hover:border-slate-700 rounded-xl p-3 flex flex-col justify-between space-y-2 transition"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-slate-200 truncate" title={src.name}>
+                            {src.name}
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1 mt-0.5">
+                            <span className="text-slate-500">branch:</span>
+                            <span className="text-amber-400/90">{src.branch}</span>
+                          </div>
+                        </div>
+                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold border shrink-0 ${
+                          src.status === 200 
+                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
+                            : 'bg-red-500/10 text-red-400 border-red-500/30'
+                        }`}>
+                          {src.status === 200 ? '200 OK' : `HTTP ${src.status}`}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-900">
+                        <span className="text-purple-300 font-semibold font-mono">
+                          {src.flagsFound} flags detected
+                        </span>
+                        <a
+                          href={src.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-slate-400 hover:text-cyan-400 flex items-center space-x-1 transition"
+                          title="View source file on GitHub"
+                        >
+                          <span>Source</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Discovered Flags Section */}
+              <div className="space-y-3.5 pt-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <Code className="w-3.5 h-3.5 text-cyan-400" />
+                    Discovered Runner Flags ({flagScanResults?.discoveredFlags?.length || 0})
+                  </h4>
+
+                  {/* Prefix Filters */}
+                  <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pb-1">
+                    {[
+                      { id: 'all', label: 'All' },
+                      { id: 'PROTON', label: 'PROTON_*' },
+                      { id: 'WINE', label: 'WINE_*' },
+                      { id: 'DXVK', label: 'DXVK_*' },
+                      { id: 'VKD3D', label: 'VKD3D_*' },
+                      { id: 'RADV', label: 'RADV_*' },
+                      { id: 'OTHER', label: 'Wrappers / Others' },
+                    ].map((btn) => (
+                      <button
+                        key={btn.id}
+                        onClick={() => setFlagPrefixFilter(btn.id)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition shrink-0 border ${
+                          flagPrefixFilter === btn.id
+                            ? 'bg-purple-500/20 text-purple-300 border-purple-500/40 shadow-sm'
+                            : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'
+                        }`}
+                      >
+                        {btn.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Filter Search Input */}
+                <div className="relative">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={flagFilterText}
+                    onChange={(e) => setFlagFilterText(e.target.value)}
+                    placeholder="Search discovered flags (e.g. ADD_CONFIG, TOPOLOGY, WAYLAND, MHWILDS, REFLEX, PYROVEIL)..."
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-purple-500 text-slate-100 text-xs rounded-xl pl-9 pr-8 py-2.5 focus:outline-none placeholder:text-slate-500 font-medium transition shadow-inner"
+                  />
+                  {flagFilterText && (
+                    <button
+                      onClick={() => setFlagFilterText('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 p-1 rounded"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Flags Cards Grid */}
+                {loadingFlagScan ? (
+                  <div className="bg-slate-950 border border-slate-800 rounded-xl p-12 text-center space-y-3">
+                    <RefreshCw className="w-8 h-8 text-purple-400 animate-spin mx-auto" />
+                    <p className="text-sm font-semibold text-slate-200">Scanning GitHub runner repositories in real-time...</p>
+                    <p className="text-xs text-slate-500">Querying Valve, GE-Proton, Proton-CachyOS, Proton-EM, Proton-RTSP, UMU, VKD3D-Proton, and DXVK</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {(flagScanResults?.discoveredFlags || [])
+                      .filter((f) => {
+                        if (flagPrefixFilter === 'PROTON' && !f.key.startsWith('PROTON_')) return false;
+                        if (flagPrefixFilter === 'WINE' && !f.key.startsWith('WINE_')) return false;
+                        if (flagPrefixFilter === 'DXVK' && !f.key.startsWith('DXVK_')) return false;
+                        if (flagPrefixFilter === 'VKD3D' && !f.key.startsWith('VKD3D_')) return false;
+                        if (flagPrefixFilter === 'RADV' && !f.key.startsWith('RADV_')) return false;
+                        if (flagPrefixFilter === 'OTHER') {
+                          if (f.key.startsWith('PROTON_') || f.key.startsWith('WINE_') || f.key.startsWith('DXVK_') || f.key.startsWith('VKD3D_') || f.key.startsWith('RADV_')) {
+                            return false;
+                          }
+                        }
+                        if (flagFilterText.trim() !== '') {
+                          const q = flagFilterText.toLowerCase().trim();
+                          const inKey = f.key.toLowerCase().includes(q);
+                          const matchedProto = PROTON_FLAGS.find((pf) => pf.key === f.key || pf.id === f.key.toLowerCase());
+                          const inDesc = matchedProto ? (matchedProto.description.toLowerCase().includes(q) || matchedProto.name.toLowerCase().includes(q)) : false;
+                          return inKey || inDesc;
+                        }
+                        return true;
+                      })
+                      .map((flag) => {
+                        const matchedProto = PROTON_FLAGS.find((pf) => pf.key === flag.key || pf.id === flag.key.toLowerCase());
+                        const isCopied = copiedFlag === flag.key;
+
+                        return (
+                          <div
+                            key={flag.key}
+                            className="bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl p-3.5 space-y-2.5 transition shadow-sm flex flex-col justify-between"
+                          >
+                            <div className="space-y-1.5">
+                              {/* Top Bar: Key & Badges */}
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center space-x-2">
+                                    <code className="text-xs font-mono font-bold text-cyan-300 select-all">
+                                      {flag.key}
+                                    </code>
+                                    {matchedProto ? (
+                                      <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[9px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                        <CheckCircle2 className="w-2.5 h-2.5" />
+                                        In Checklist
+                                      </span>
+                                    ) : (
+                                      <span className="bg-amber-500/10 text-amber-300 border border-amber-500/30 text-[9px] font-semibold px-2 py-0.5 rounded-full">
+                                        Discovered Upstream
+                                      </span>
+                                    )}
+                                  </div>
+                                  {matchedProto && (
+                                    <p className="text-xs font-semibold text-slate-200">
+                                      {matchedProto.name}
+                                    </p>
+                                  )}
+                                </div>
+
+                                <button
+                                  onClick={() => handleCopyFlag(flag.key)}
+                                  className={`p-1.5 rounded-lg border text-xs transition shrink-0 ${
+                                    isCopied
+                                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                      : 'bg-slate-900 text-slate-400 hover:text-slate-200 border-slate-800 hover:border-slate-700'
+                                  }`}
+                                  title="Copy flag syntax"
+                                >
+                                  {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                                </button>
+                              </div>
+
+                              {/* Description / Tooltip */}
+                              <p className="text-[11px] text-slate-400 leading-relaxed">
+                                {matchedProto ? matchedProto.description : `Discovered across ${flag.sources.join(', ')} runner codebase.`}
+                              </p>
+                            </div>
+
+                            {/* Bottom row: Sources badges & Action */}
+                            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-900 text-[10px]">
+                              <div className="flex flex-wrap items-center gap-1">
+                                <span className="text-slate-500 font-mono text-[9px]">Sources:</span>
+                                {flag.sources.map((s) => (
+                                  <span
+                                    key={s}
+                                    className="bg-slate-900 text-slate-300 border border-slate-800 px-1.5 py-0.5 rounded text-[9px] font-mono"
+                                  >
+                                    {s}
+                                  </span>
+                                ))}
+                              </div>
+
+                              {onSelectFlagToSearch && (
+                                <button
+                                  onClick={() => {
+                                    onSelectFlagToSearch(flag.key);
+                                    onClose();
+                                  }}
+                                  className="text-cyan-400 hover:text-cyan-300 font-semibold flex items-center space-x-1"
+                                >
+                                  <span>Configure in Checklist</span>
+                                  <ChevronDown className="w-3 h-3 -rotate-90" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+
             </div>
           )}
 

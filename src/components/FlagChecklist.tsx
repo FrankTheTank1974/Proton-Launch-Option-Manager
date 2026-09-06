@@ -43,6 +43,9 @@ interface FlagChecklistProps {
   extraArgs: string;
   onChangeExtraArgs: (args: string) => void;
   distro: string;
+  isThreeColumnMode?: boolean;
+  onOpenFlagScanner?: () => void;
+  externalSearchQuery?: string;
 }
 
 export const FlagChecklist: React.FC<FlagChecklistProps> = ({
@@ -55,12 +58,24 @@ export const FlagChecklist: React.FC<FlagChecklistProps> = ({
   extraArgs,
   onChangeExtraArgs,
   distro,
+  isThreeColumnMode = false,
+  onOpenFlagScanner,
+  externalSearchQuery,
 }) => {
   const [activeTab, setActiveTab] = useState<FlagCategory | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [onlyEnabled, setOnlyEnabled] = useState(false);
   const [newEnvKey, setNewEnvKey] = useState('');
   const [newEnvVal, setNewEnvVal] = useState('');
+
+  React.useEffect(() => {
+    if (externalSearchQuery !== undefined) {
+      setSearchQuery(externalSearchQuery);
+      if (externalSearchQuery !== '') {
+        setActiveTab('all');
+      }
+    }
+  }, [externalSearchQuery]);
 
   // Detect active Proton flag conflicts
   const activeConflicts = detectFlagConflicts(enabledFlags, customEnvVars);
@@ -106,10 +121,14 @@ export const FlagChecklist: React.FC<FlagChecklistProps> = ({
   ];
 
   const searchChips = [
+    { label: 'ADD_CONFIG', query: 'ADD_CONFIG' },
     { label: 'NVAPI / DLSS', query: 'NVAPI' },
-    { label: 'FSR', query: 'FSR' },
+    { label: 'FSR / FSR4', query: 'FSR' },
     { label: 'Wayland', query: 'Wayland' },
+    { label: 'Topology', query: 'TOPOLOGY' },
     { label: 'NTSYNC', query: 'NTSYNC' },
+    { label: 'DualSense', query: 'DualSense' },
+    { label: 'Pyroveil', query: 'Pyroveil' },
     { label: 'FrameGen', query: 'LSFG' },
     { label: 'Reflex / Latency', query: 'Low Latency' },
     { label: 'RTSP / VRChat', query: 'RTSP' },
@@ -200,18 +219,32 @@ export const FlagChecklist: React.FC<FlagChecklistProps> = ({
           )}
         </div>
 
-        {/* Filter Only Enabled Button */}
-        <button
-          onClick={() => setOnlyEnabled(!onlyEnabled)}
-          className={`flex items-center space-x-1.5 px-3 py-2 rounded-lg text-xs font-semibold shrink-0 transition ${
-            onlyEnabled
-              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
-              : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-slate-200 border border-slate-800'
-          }`}
-        >
-          <Filter className="w-3.5 h-3.5" />
-          <span>Only Active ({enabledCount})</span>
-        </button>
+        <div className="flex items-center space-x-2 shrink-0">
+          {/* Runner Flag Scanner Button */}
+          {onOpenFlagScanner && (
+            <button
+              onClick={onOpenFlagScanner}
+              className="flex items-center space-x-1.5 px-3 py-2 rounded-lg text-xs font-semibold shrink-0 transition bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 hover:border-purple-500/50 shadow-sm"
+              title="Rescan GitHub pages of Proton runners to check for newly added flags"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+              <span>Runner Flag Scanner</span>
+            </button>
+          )}
+
+          {/* Filter Only Enabled Button */}
+          <button
+            onClick={() => setOnlyEnabled(!onlyEnabled)}
+            className={`flex items-center space-x-1.5 px-3 py-2 rounded-lg text-xs font-semibold shrink-0 transition ${
+              onlyEnabled
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-slate-200 border border-slate-800'
+            }`}
+          >
+            <Filter className="w-3.5 h-3.5" />
+            <span>Only Active ({enabledCount})</span>
+          </button>
+        </div>
       </div>
 
       {/* Quick Search Chips */}
@@ -369,7 +402,11 @@ export const FlagChecklist: React.FC<FlagChecklistProps> = ({
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className={
+          isThreeColumnMode
+            ? "grid grid-cols-1 xl:grid-cols-2 gap-3"
+            : "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3"
+        }>
           {filteredFlags.map((flag) => {
             const isChecked = enabledFlags[flag.id] === true || (typeof enabledFlags[flag.id] === 'string' && enabledFlags[flag.id] !== '');
             const currentValue = enabledFlags[flag.id];

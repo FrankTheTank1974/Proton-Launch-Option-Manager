@@ -3,22 +3,27 @@ import { INITIAL_STEAM_GAMES } from './steamGamesData';
 import { PROTON_FLAGS } from './protonFlagsData';
 
 function isWrapperFlag(f: any): boolean {
-  return f.category === 'performance_wrappers' || f.id === 'gamescope_wrapper' || f.id === 'obs_gamecapture';
+  return f.isWrapper === true || f.id === 'gamescope_wrapper' || f.id === 'obs_gamecapture';
 }
 
 function getWrapperOrder(f: any): number {
+  if (f.wrapperOrder) return f.wrapperOrder;
   if (f.id === 'mangohud' || f.id === 'obs_gamecapture') return 1;
   if (f.id === 'gamemoderun' || f.id === 'game_performance') return 2;
   if (f.id === 'gamescope_wrapper') return 3;
   return 1;
 }
 
-function generateCFlagsArray(): string {
+function generateCFlagsArray(currentCommand: string = ''): string {
+  const tokens = currentCommand ? currentCommand.trim().split(/\s+/) : [];
+
   return PROTON_FLAGS.map(f => {
     const isWrapper = isWrapperFlag(f);
     const wrapperOrder = isWrapper ? getWrapperOrder(f) : 0;
 
     let envVar = '';
+    let isEnabled = false;
+
     if (isWrapper) {
       if (f.id === 'gamescope_wrapper') envVar = 'gamescope -w 1920 -h 1080 -r 144 -f --';
       else if (f.id === 'gamemoderun') envVar = 'gamemoderun';
@@ -26,16 +31,34 @@ function generateCFlagsArray(): string {
       else if (f.id === 'obs_gamecapture') envVar = 'obs-gamecapture';
       else if (f.id === 'game_performance') envVar = 'game-performance';
       else envVar = f.key;
+
+      if (tokens.length > 0) {
+        if (f.id === 'gamescope_wrapper') {
+          isEnabled = tokens.includes('gamescope');
+        } else {
+          isEnabled = tokens.includes(f.key);
+        }
+      }
     } else if (f.type === 'toggle') {
       envVar = `${f.key}=1`;
+      if (tokens.length > 0) {
+        isEnabled = tokens.some(t => t === `${f.key}=1` || t.startsWith(`${f.key}=`));
+      }
     } else {
-      const match = (f.example || '').replace(' %command%', '').trim();
-      envVar = match || `${f.key}=1`;
+      const regex = new RegExp(`(?:^|\\s)(${f.key}=(?:"[^"]*"|'[^']*'|\\S+))`);
+      const match = currentCommand ? currentCommand.match(regex) : null;
+      if (match) {
+        envVar = match[1];
+        isEnabled = true;
+      } else {
+        const fallback = (f.example || '').replace(' %command%', '').trim();
+        envVar = fallback || `${f.key}=1`;
+      }
     }
 
     const cleanName = f.name.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
     const cleanEnvVar = envVar.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-    return `    { "${cleanName}", "${cleanEnvVar}", ${isWrapper}, ${wrapperOrder}, false }`;
+    return `    { "${cleanName}", "${cleanEnvVar}", ${isWrapper}, ${wrapperOrder}, ${isEnabled ? 'true' : 'false'} }`;
   }).join(',\n');
 }
 
@@ -59,7 +82,7 @@ export function getCCodeTemplates(selectedGameName: string, selectedAppId: numbe
 
   const escapedSelectedGameName = selectedGameName.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
   const initialGameArray = gamesToUse.map(g => `    { "${g.name.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}", ${g.appId}, 0 }`).join(',\n');
-  const cFlagsArray = generateCFlagsArray();
+  const cFlagsArray = generateCFlagsArray(currentCommand);
 
   return [
     {
@@ -146,8 +169,11 @@ static void print_usage(const char *progname) {
     printf("Usage: %s [OPTIONS]\\n\\n", progname);
     printf("Modes & Actions:\\n");
     printf("  -i, --interactive       Start Interactive ANSI Terminal UI (TUI)\\n");
-    printf("  -p, --preset <name>     Apply built-in preset (deck, esports, rt, retro, battery)\\n");
+    printf("  -p, --preset <name>     Apply built-in preset (deck, esports, rt, cachyos, retro, scaling, battery)\\n");
     printf("      --list-presets      Display all available performance presets\\n");
+    printf("      --list-flags        Display all %d available Proton flags and wrappers\\n", NUM_FLAGS);
+    printf("      --enable <name>     Enable a specific flag or wrapper by key/name\\n");
+    printf("      --disable <name>    Disable a specific flag or wrapper by key/name\\n");
     printf("  -l, --list-games        Auto-scan and list installed Steam games\\n");
     printf("  -g, --game <appid|name> Set target Steam game by AppID or partial name\\n");
     printf("  -c, --check-conflicts   Detect incompatible flag combinations\\n");
@@ -160,7 +186,8 @@ static void print_usage(const char *progname) {
     printf("  -h, --help              Show this help message\\n\\n");
     printf("Examples:\\n");
     printf("  %s -i                               # Interactive TUI mode\\n", progname);
-    printf("  %s -g 1091500 -p deck -w -x         # Apply Deck preset to Cyberpunk & launch\\n", progname);
+    printf("  %s --list-flags                     # View all runner flags and syntax\\n", progname);
+    printf("  %s -g 1091500 -p cachyos -w -x      # Apply CachyOS preset to Cyberpunk & launch\\n", progname);
     printf("  %s --list-games                     # Scan all local Steam libraries\\n", progname);
 }
 
@@ -174,6 +201,9 @@ int main(int argc, char *argv[]) {
         {"interactive",      no_argument,       0, 'i'},
         {"preset",           required_argument, 0, 'p'},
         {"list-presets",     no_argument,       0, 1001},
+        {"list-flags",       no_argument,       0, 1006},
+        {"enable",           required_argument, 0, 1007},
+        {"disable",          required_argument, 0, 1008},
         {"list-games",       no_argument,       0, 'l'},
         {"game",             required_argument, 0, 'g'},
         {"check-conflicts",  no_argument,       0, 'c'},
@@ -189,6 +219,7 @@ int main(int argc, char *argv[]) {
 
     bool opt_interactive = false;
     bool opt_list_presets = false;
+    bool opt_list_flags = false;
     bool opt_list_games = false;
     bool opt_check_conflicts = false;
     bool opt_auto_fix = false;
@@ -206,6 +237,35 @@ int main(int argc, char *argv[]) {
             case 'i': opt_interactive = true; break;
             case 'p': snprintf(opt_preset_name, sizeof(opt_preset_name), "%s", optarg); break;
             case 1001: opt_list_presets = true; break;
+            case 1006: opt_list_flags = true; break;
+            case 1007: {
+                int enabled_count = 0;
+                for (int i = 0; i < NUM_FLAGS; i++) {
+                    if (strcasestr(g_flags[i].name, optarg) || strcasestr(g_flags[i].env_var, optarg)) {
+                        g_flags[i].enabled = true;
+                        printf("✅ Enabled flag: %s (%s)\\n", g_flags[i].name, g_flags[i].env_var);
+                        enabled_count++;
+                    }
+                }
+                if (enabled_count == 0) {
+                    fprintf(stderr, "⚠️ No flags matched query '%s'\\n", optarg);
+                }
+                break;
+            }
+            case 1008: {
+                int disabled_count = 0;
+                for (int i = 0; i < NUM_FLAGS; i++) {
+                    if (strcasestr(g_flags[i].name, optarg) || strcasestr(g_flags[i].env_var, optarg)) {
+                        g_flags[i].enabled = false;
+                        printf("❌ Disabled flag: %s (%s)\\n", g_flags[i].name, g_flags[i].env_var);
+                        disabled_count++;
+                    }
+                }
+                if (disabled_count == 0) {
+                    fprintf(stderr, "⚠️ No flags matched query '%s'\\n", optarg);
+                }
+                break;
+            }
             case 'l': opt_list_games = true; break;
             case 'g': {
                 int id = atoi(optarg);
@@ -237,6 +297,19 @@ int main(int argc, char *argv[]) {
     // 1. Handle Preset listing
     if (opt_list_presets) {
         print_all_presets();
+        return 0;
+    }
+
+    // 1b. Handle Flags listing
+    if (opt_list_flags) {
+        printf("\\n📋 Available Proton Flags & Wrappers (%d Total):\\n", NUM_FLAGS);
+        printf("================================================================================\\n");
+        printf("%-3s | %-40s | %-32s\\n", "#", "Flag / Feature Name", "Launch Syntax");
+        printf("--------------------------------------------------------------------------------\\n");
+        for (int i = 0; i < NUM_FLAGS; i++) {
+            printf("%-3d | %-40.40s | %-32.32s\\n", i + 1, g_flags[i].name, g_flags[i].env_var);
+        }
+        printf("================================================================================\\n");
         return 0;
     }
 
@@ -355,7 +428,7 @@ int main(int argc, char *argv[]) {
 
 typedef struct {
     char name[128];
-    char env_var[128];
+    char env_var[256];
     bool is_wrapper;
     int wrapper_order;
     bool enabled;
@@ -460,7 +533,8 @@ int detect_conflicts(const ProtonFlag *flags, int num_flags, FlagConflict *out_c
     }
 
     // Rule 4: Gamescope vs Native Wayland Driver
-    if (is_flag_active(flags, num_flags, "gamescope") && is_flag_active(flags, num_flags, "PROTON_ENABLE_WAYLAND")) {
+    if (is_flag_active(flags, num_flags, "gamescope") && 
+        (is_flag_active(flags, num_flags, "PROTON_ENABLE_WAYLAND") || is_flag_active(flags, num_flags, "PROTON_USE_WAYLAND") || is_flag_active(flags, num_flags, "winewayland.drv"))) {
         if (count < max_conflicts) {
             FlagConflict *c = &out_conflicts[count++];
             snprintf(c->id, sizeof(c->id), "gamescope_vs_wayland");
@@ -482,6 +556,18 @@ int detect_conflicts(const ProtonFlag *flags, int num_flags, FlagConflict *out_c
             snprintf(c->message, sizeof(c->message), "Disabling both Esync and Fsync forces Wine to use high-overhead server event objects.");
             snprintf(c->recommendation, sizeof(c->recommendation), "Leave at least Esync or Fsync enabled for normal multi-threading performance.");
             c->severity = SEVERITY_WARNING;
+        }
+    }
+
+    // Rule 6: Disable Reflex vs NVAPI Reflex Layer
+    if (is_flag_active(flags, num_flags, "PROTON_DISABLE_REFLEX") && is_flag_active(flags, num_flags, "DXVK_NVAPI_VKREFLEX")) {
+        if (count < max_conflicts) {
+            FlagConflict *c = &out_conflicts[count++];
+            snprintf(c->id, sizeof(c->id), "disable_reflex_vs_vkreflex");
+            snprintf(c->title, sizeof(c->title), "NVIDIA Reflex Disable vs DXVK VKReflex Layer");
+            snprintf(c->message, sizeof(c->message), "PROTON_DISABLE_REFLEX actively suppresses Reflex while DXVK_NVAPI_VKREFLEX attempts to force Vulkan Reflex queues.");
+            snprintf(c->recommendation, sizeof(c->recommendation), "Uncheck PROTON_DISABLE_REFLEX to enable low-latency Reflex pacing.");
+            c->severity = SEVERITY_ERROR;
         }
     }
 
@@ -511,9 +597,12 @@ void auto_resolve_conflicts(ProtonFlag *flags, int num_flags, const FlagConflict
             disable_flag_by_fragment(flags, num_flags, "PROTON_NO_FSYNC");
         } else if (strcmp(conflicts[i].id, "gamescope_vs_wayland") == 0) {
             disable_flag_by_fragment(flags, num_flags, "PROTON_ENABLE_WAYLAND");
+            disable_flag_by_fragment(flags, num_flags, "PROTON_USE_WAYLAND");
         } else if (strcmp(conflicts[i].id, "no_esync_no_fsync") == 0) {
             disable_flag_by_fragment(flags, num_flags, "PROTON_NO_ESYNC");
             disable_flag_by_fragment(flags, num_flags, "PROTON_NO_FSYNC");
+        } else if (strcmp(conflicts[i].id, "disable_reflex_vs_vkreflex") == 0) {
+            disable_flag_by_fragment(flags, num_flags, "PROTON_DISABLE_REFLEX");
         }
     }
 }
@@ -540,7 +629,7 @@ typedef struct {
     char name[128];
     char description[256];
     char custom_args[128];
-    char active_flags[8][128];
+    char active_flags[12][128];
     int num_active_flags;
 } GamePreset;
 
@@ -572,18 +661,26 @@ static const GamePreset g_presets[] = {
     {
         "deck",
         "Steam Deck / Handheld Optimal",
-        "MangoHud overlay, GameMode priority, NTSYNC kernel sync, and optimal battery balance",
+        "MangoHud overlay, GameMode priority, NTSYNC kernel sync, and direct DualSense/HIDRAW controller support",
         "-novid",
-        {"mangohud", "gamemoderun", "PROTON_USE_NTSYNC"},
-        3
+        {"mangohud", "gamemoderun", "PROTON_USE_NTSYNC", "PROTON_ENABLE_HIDRAW"},
+        4
     },
     {
         "esports",
         "Max Performance & High FPS",
-        "GameMode CPU pinning, NTSYNC, disable shader cache disk stalls, NVAPI Reflex",
+        "GameMode CPU pinning, NTSYNC kernel sync, DXVK_NVAPI_VKREFLEX Reflex layer, and CPU topology tuning",
         "-high -novid +fps_max 0",
-        {"gamemoderun", "PROTON_USE_NTSYNC", "ENABLE_NVAPI"},
-        3
+        {"gamemoderun", "PROTON_USE_NTSYNC", "DXVK_NVAPI_VKREFLEX", "ENABLE_NVAPI"},
+        4
+    },
+    {
+        "cachyos",
+        "CachyOS Kernel & Runner Max",
+        "CachyOS game-performance wrapper, PROTON_ADD_CONFIG multi-config bundle, and NTSYNC kernel fast-path",
+        "-novid",
+        {"game-performance", "PROTON_USE_NTSYNC", "PROTON_ADD_CONFIG", "PROTON_TOPOLOGY"},
+        4
     },
     {
         "rt",
@@ -604,9 +701,9 @@ static const GamePreset g_presets[] = {
     {
         "scaling",
         "Lossless Scaling & Frame Gen",
-        "LSFG-VK Vulkan frame multiplier (2x) with MangoHud latency monitoring",
+        "LSFG-VK (ENABLE_LSFG) Vulkan frame multiplier with MangoHud latency overlay",
         "",
-        {"lsfg-vk", "mangohud"},
+        {"ENABLE_LSFG", "mangohud"},
         2
     },
     {
@@ -1338,6 +1435,12 @@ int run_interactive_tui(ProtonFlag *flags, int num_flags, int app_id, const char
 #include <string.h>
 #include <termios.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
+
+static const SteamGameInfo default_catalog_games[] = {
+${initialGameArray}
+};
+#define NUM_DEFAULT_CATALOG ((int)(sizeof(default_catalog_games) / sizeof(default_catalog_games[0])))
 
 static struct termios orig_termios;
 
@@ -1388,7 +1491,74 @@ int run_interactive_tui(ProtonFlag *flags, int num_flags, int app_id, const char
     char current_game[128];
     snprintf(current_game, sizeof(current_game), "%s", game_name);
 
-    char status_msg[512] = "Use [UP/DOWN] to navigate, [SPACE] to toggle, [P] for presets, [S] to save";
+    // Initialize unified games list (Active Game + Scanned Steam Libraries + Built-in Catalog Games)
+    SteamGameInfo all_games[128];
+    int total_games = 0;
+
+    // 1. Target game as initial entry
+    all_games[0].app_id = app_id;
+    snprintf(all_games[0].name, sizeof(all_games[0].name), "%s", game_name);
+    total_games = 1;
+
+    // 2. Discover installed games from Steam library folders
+    SteamGameInfo scanned[64];
+    int scanned_count = scan_all_steam_libraries(scanned, 64);
+    for (int i = 0; i < scanned_count && total_games < 128; i++) {
+        bool exists = false;
+        for (int j = 0; j < total_games; j++) {
+            if (all_games[j].app_id == scanned[i].app_id) { exists = true; break; }
+        }
+        if (!exists) {
+            all_games[total_games++] = scanned[i];
+        }
+    }
+
+    // 3. Fallback to pre-configured catalog games to guarantee games can always be cycled
+    for (int i = 0; i < NUM_DEFAULT_CATALOG && total_games < 128; i++) {
+        bool exists = false;
+        for (int j = 0; j < total_games; j++) {
+            if (all_games[j].app_id == default_catalog_games[i].app_id) { exists = true; break; }
+        }
+        if (!exists) {
+            all_games[total_games++] = default_catalog_games[i];
+        }
+    }
+
+    int current_game_idx = 0;
+    for (int i = 0; i < total_games; i++) {
+        if (all_games[i].app_id == current_appid) {
+            current_game_idx = i;
+            break;
+        }
+    }
+
+    // Active Preset tracking
+    int active_preset_idx = -1; // -1 indicates custom/manual flags
+    bool preset_modified = false;
+
+    // Detect if current active flags already match any preset profile
+    for (int p = 0; p < get_presets_count(); p++) {
+        const GamePreset *gp = get_preset_by_index(p);
+        if (gp && gp->num_active_flags > 0) {
+            bool all_match = true;
+            for (int a = 0; a < gp->num_active_flags; a++) {
+                bool found = false;
+                for (int f = 0; f < num_flags; f++) {
+                    if (flags[f].enabled && (strstr(flags[f].env_var, gp->active_flags[a]) || strstr(flags[f].name, gp->active_flags[a]))) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) { all_match = false; break; }
+            }
+            if (all_match) {
+                active_preset_idx = p;
+                break;
+            }
+        }
+    }
+
+    char status_msg[512] = "Use [UP/DOWN] to navigate, [SPACE] to toggle, [P] for presets, [G] for games, [S] to save";
 
     while (1) {
         // Clear screen
@@ -1397,7 +1567,32 @@ int run_interactive_tui(ProtonFlag *flags, int num_flags, int app_id, const char
         // Header
         printf("\\033[1;36m================================================================================\\033[0m\\n");
         printf("\\033[1;37m 🚀 Proton Launch Options Manager (Interactive C99 TUI)\\033[0m\\n");
-        printf("\\033[1;32m Target Game:\\033[0m \\033[1m%s\\033[0m (AppID: \\033[1;33m%d\\033[0m)\\n", current_game, current_appid);
+        printf(" \\033[1;32m🎮 Target Game:\\033[0m   \\033[1;37m[%d/%d] %s\\033[0m (AppID: \\033[1;33m%d\\033[0m)  \\033[2m[Press G to cycle %d games]\\033[0m\\n",
+               current_game_idx + 1, total_games, current_game, current_appid, total_games);
+
+        if (active_preset_idx >= 0 && active_preset_idx < get_presets_count()) {
+            const GamePreset *ap = get_preset_by_index(active_preset_idx);
+            printf(" \\033[1;35m⚡ Active Preset:\\033[0m \\033[1;33m[%d/%d] %s\\033[0m (\\033[1;36m%s\\033[0m)%s  \\033[2m[Press P to cycle presets]\\033[0m\\n",
+                   active_preset_idx + 1, get_presets_count(), ap->name, ap->id,
+                   preset_modified ? " \\033[1;31m[Modified]\\033[0m" : " \\033[1;32m[Applied]\\033[0m");
+            printf("    \\033[2m└─ %s\\033[0m\\n", ap->description);
+        } else {
+            printf(" \\033[1;35m⚡ Active Preset:\\033[0m \\033[1;37m[Custom / Manual Flags]\\033[0m  \\033[2m[Press P to cycle %d presets: deck, esports, cachyos...]\\033[0m\\n",
+                   get_presets_count());
+            printf("    \\033[2m└─ Current launch flags customized manually\\033[0m\\n");
+        }
+
+        // Preset carousel bar
+        printf(" \\033[2mPresets Bar:\\033[0m ");
+        for (int p = 0; p < get_presets_count(); p++) {
+            const GamePreset *gp = get_preset_by_index(p);
+            if (p == active_preset_idx) {
+                printf("\\033[1;30;43m ▶ %s ◀ \\033[0m ", gp->id);
+            } else {
+                printf("\\033[2m[%s]\\033[0m ", gp->id);
+            }
+        }
+        printf("\\n");
         printf("\\033[1;36m================================================================================\\033[0m\\n");
 
         // Conflict check
@@ -1411,8 +1606,16 @@ int run_interactive_tui(ProtonFlag *flags, int num_flags, int app_id, const char
         }
         printf("--------------------------------------------------------------------------------\\n");
 
-        // Checklist items (windowed scroll for 98 flags)
-        int page_size = 14;
+        // Dynamic terminal height calculation for smooth, non-overflowing scrolling
+        struct winsize ws;
+        int terminal_rows = 24;
+        if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_row > 16) {
+            terminal_rows = ws.ws_row;
+        }
+        int page_size = terminal_rows - 16;
+        if (page_size < 6) page_size = 6;
+        if (page_size > 22) page_size = 22;
+
         int start_idx = selected_idx - (page_size / 2);
         if (start_idx < 0) start_idx = 0;
         if (start_idx + page_size > num_flags) start_idx = num_flags - page_size;
@@ -1471,31 +1674,43 @@ int run_interactive_tui(ProtonFlag *flags, int num_flags, int app_id, const char
             if (selected_idx < num_flags - 1) selected_idx++;
         } else if (c == ' ') {
             flags[selected_idx].enabled = !flags[selected_idx].enabled;
-            snprintf(status_msg, sizeof(status_msg), "Toggled '%s'", flags[selected_idx].name);
+            if (active_preset_idx >= 0) preset_modified = true;
+            snprintf(status_msg, sizeof(status_msg), "Toggled '%s' -> %s",
+                     flags[selected_idx].name, flags[selected_idx].enabled ? "ON" : "OFF");
         } else if (c == 'c' || c == 'C') {
             if (num_conflicts > 0) {
                 auto_resolve_conflicts(flags, num_flags, conflicts, num_conflicts);
+                if (active_preset_idx >= 0) preset_modified = true;
                 snprintf(status_msg, sizeof(status_msg), "Resolved %d flag conflicts!", num_conflicts);
             }
         } else if (c == 'p' || c == 'P') {
-            // Cycle presets
-            static int p_idx = 0;
-            p_idx = (p_idx + 1) % get_presets_count();
-            const GamePreset *p = get_preset_by_index(p_idx);
+            // Cycle presets forward (p) or backward (P)
+            if (c == 'P') {
+                active_preset_idx = (active_preset_idx - 1 + get_presets_count()) % get_presets_count();
+            } else {
+                active_preset_idx = (active_preset_idx + 1) % get_presets_count();
+            }
+            const GamePreset *p = get_preset_by_index(active_preset_idx);
             if (p) {
                 apply_preset(flags, num_flags, p->id, NULL, 0);
-                snprintf(status_msg, sizeof(status_msg), "Applied preset '%s'", p->name);
+                preset_modified = false;
+                snprintf(status_msg, sizeof(status_msg), "⚡ Applied Preset [%d/%d]: '%s' (%s)",
+                         active_preset_idx + 1, get_presets_count(), p->name, p->id);
             }
         } else if (c == 'g' || c == 'G') {
-            // Switch game from scanner
-            SteamGameInfo scanned[64];
-            int count = scan_all_steam_libraries(scanned, 64);
-            if (count > 0) {
-                static int g_idx = 0;
-                g_idx = (g_idx + 1) % count;
-                current_appid = scanned[g_idx].app_id;
-                snprintf(current_game, sizeof(current_game), "%s", scanned[g_idx].name);
-                snprintf(status_msg, sizeof(status_msg), "Selected '%s' (AppID %d)", current_game, current_appid);
+            // Cycle game from unified library / catalog
+            if (total_games > 1) {
+                if (c == 'G') {
+                    current_game_idx = (current_game_idx - 1 + total_games) % total_games;
+                } else {
+                    current_game_idx = (current_game_idx + 1) % total_games;
+                }
+                current_appid = all_games[current_game_idx].app_id;
+                snprintf(current_game, sizeof(current_game), "%s", all_games[current_game_idx].name);
+                snprintf(status_msg, sizeof(status_msg), "🎮 Switched Target Game [%d/%d]: '%s' (AppID %d)",
+                         current_game_idx + 1, total_games, current_game, current_appid);
+            } else {
+                snprintf(status_msg, sizeof(status_msg), "ℹ️ Only 1 game available in library/catalog (AppID %d)", current_appid);
             }
         } else if (c == 'S') {
             char vdf_path[1024];
@@ -1551,7 +1766,7 @@ ${cFlagsArray}
 };
 
 #define NUM_FLAGS ((int)(sizeof(g_flags) / sizeof(g_flags[0])))
-static GtkWidget *g_check_btns[256];
+static GtkWidget *g_check_btns[512];
 
 static GtkWidget *g_preview_entry;
 static GtkWidget *g_game_combo;
@@ -1974,7 +2189,9 @@ int main(int argc, char *argv[]) {
     gtk_box_pack_start(GTK_BOX(main_vbox), g_conflict_lbl, FALSE, FALSE, 0);
 
     // Frame for Flags with Scrolled Window
-    GtkWidget *frame = gtk_frame_new("Proton Flags & Performance Wrappers (98 Flags)");
+    char frame_title[128];
+    snprintf(frame_title, sizeof(frame_title), "Proton Flags & Performance Wrappers (%d Flags)", NUM_FLAGS);
+    GtkWidget *frame = gtk_frame_new(frame_title);
     gtk_box_pack_start(GTK_BOX(main_vbox), frame, TRUE, TRUE, 0);
 
     GtkWidget *scrolled = gtk_scrolled_window_new(NULL, NULL);
@@ -1991,9 +2208,8 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < (int)NUM_FLAGS; i++) {
         g_check_btns[i] = gtk_check_button_new_with_label(g_flags[i].name);
 
-        if (strstr(g_flags[i].env_var, "PROTON_ENABLE_NVAPI") || strstr(g_flags[i].env_var, "gamemoderun")) {
+        if (g_flags[i].enabled) {
             gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(g_check_btns[i]), TRUE);
-            g_flags[i].enabled = true;
         }
 
         g_signal_connect(g_check_btns[i], "toggled", G_CALLBACK(on_flag_toggled), GINT_TO_POINTER(i));
@@ -2369,6 +2585,17 @@ Start the interactive ANSI Terminal User Interface (TUI). Features live launch c
 .BR \\-h ", " \\-\\-help
 Display a summary of command-line options and exit.
 
+.SS "Flag Management & Querying"
+.TP
+.B \\-\\-list-flags
+Print a complete formatted table of all available Proton environment variables, options, and performance wrappers.
+.TP
+.BI \\-\\-enable= FLAG
+Enable a specific Proton flag or wrapper by key (e.g. \\fBPROTON_TOPOLOGY\\fR) or name fragment.
+.TP
+.BI \\-\\-disable= FLAG
+Disable a specific Proton flag or wrapper by key or name fragment.
+
 .SS "Game & Library Auto-Discovery"
 .TP
 .BR \\-l ", " \\-\\-list-games
@@ -2384,9 +2611,11 @@ Apply a preconfigured Proton optimization profile to the active launch command.
 Available preset identifiers:
 .RS
 .IP \\(bu 2
-\\fBdeck\\fR \\- Steam Deck Optimal (Gamescope micro-compositor, MangoHud overlay, FSR upscaling, Mesa Anti-Lag)
+\\fBdeck\\fR \\- Steam Deck Optimal (Gamescope micro-compositor, MangoHud overlay, FSR upscaling, Mesa Anti-Lag, DualSense HIDRAW)
 .IP \\(bu 2
-\\fBesports\\fR \\- Ultra-Low Latency & High FPS (NTSYNC, Reflex, GameMode, Anti-Lag, Vulkan Reflex)
+\\fBesports\\fR \\- Ultra-Low Latency & High FPS (NTSYNC, Reflex, GameMode, Anti-Lag, Vulkan Reflex, CPU Topology)
+.IP \\(bu 2
+\\fBcachyos\\fR \\- CachyOS Ultra Gaming (game-performance wrapper, PROTON_ADD_CONFIG multi-config, NTSYNC, Topology override)
 .IP \\(bu 2
 \\fBrt\\fR \\- Ray Tracing & DLSS / OptiScaler (VKD3D DXR11/DXR, NVAPI, DLSS upgrade, OptiScaler)
 .IP \\(bu 2
@@ -2590,8 +2819,10 @@ A lightweight, 100% offline, zero-dependency C utility and GTK3 application for 
    * Single-command auto-resolution (\`--auto-fix\`).
 
 2. **Game Presets & Profiles (\`presets.c\`):**
-   * Built-in curated presets: Steam Deck Optimal, Esports / High FPS, Ray Tracing & DLSS, Retro Legacy, Lossless Scaling, and Battery Saver.
-   * Apply with \`./proton_cli --preset <name>\`.
+   * Built-in curated presets: Steam Deck Optimal, Esports / High FPS, CachyOS Max, Ray Tracing & DLSS, Retro Legacy, Lossless Scaling, and Battery Saver.
+   * Apply with \`./proton_cli --preset <name>\` (e.g. \`cachyos\`, \`deck\`, \`esports\`).
+   * Query all available flags & wrappers: \`./proton_cli --list-flags\`.
+   * Enable/disable flags directly: \`./proton_cli --enable PROTON_TOPOLOGY --enable PROTON_ENABLE_HIDRAW\`.
 
 3. **Steam Library Auto-Discovery (\`scanner.c\`):**
    * Automatically parses \`libraryfolders.vdf\` across internal and external mount drives.

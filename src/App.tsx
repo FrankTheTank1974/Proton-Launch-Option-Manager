@@ -21,6 +21,8 @@ import { WriteToSteamModal } from './components/WriteToSteamModal';
 import { ProtonVersionSelector } from './components/ProtonVersionSelector';
 import { PROTON_FLAGS } from './data/protonFlagsData';
 import { launchSteamGame } from './utils/steamLauncher';
+import { useDisplayResolution } from './utils/useDisplayResolution';
+import { DisplayResolutionModal } from './components/DisplayResolutionModal';
 import { Sparkles, Terminal, Gamepad2, ShieldCheck, CheckCircle2, AlertCircle, Info, MessageSquareQuote, Image as ImageIcon, Rocket, HardDrive } from 'lucide-react';
 
 export default function App() {
@@ -74,10 +76,40 @@ export default function App() {
   const [isAddGameOpen, setIsAddGameOpen] = useState(false);
   const [isScanLocalLibraryOpen, setIsScanLocalLibraryOpen] = useState(false);
   const [isProtonManagerOpen, setIsProtonManagerOpen] = useState(false);
+  const [protonManagerTab, setProtonManagerTab] = useState<'releases' | 'installed' | 'flags-scan'>('releases');
+  const [externalFlagSearch, setExternalFlagSearch] = useState<string>('');
   const [isBackupOpen, setIsBackupOpen] = useState(false);
   const [isSteamGridDbOpen, setIsSteamGridDbOpen] = useState(false);
   const [isSteamLauncherOpen, setIsSteamLauncherOpen] = useState(false);
   const [isWriteToSteamOpen, setIsWriteToSteamOpen] = useState(false);
+  const [isDisplayModalOpen, setIsDisplayModalOpen] = useState(false);
+
+  // Screen resolution detection & layout mode
+  const {
+    metrics,
+    layoutMode,
+    setLayoutMode,
+    isEffectiveWide,
+    isThreeColumnMode,
+    isFullscreen,
+    toggleBrowserFullscreen,
+  } = useDisplayResolution();
+
+  const handleToggleQuickLayout = () => {
+    if (layoutMode === 'auto') {
+      setLayoutMode('fluid-full');
+      showToast('Switched to Fluid Full-Width layout');
+    } else if (layoutMode === 'fluid-full') {
+      setLayoutMode('3-column');
+      showToast('Switched to 3-Column Ultrawide Dashboard');
+    } else if (layoutMode === '3-column') {
+      setLayoutMode('contained');
+      showToast('Switched to Contained (1280px) layout');
+    } else {
+      setLayoutMode('auto');
+      showToast('Switched to Auto-Detect Screen layout');
+    }
+  };
 
   // Restore games from JSON backup
   const handleImportBackupGames = (importedGames: SteamGame[]) => {
@@ -375,159 +407,324 @@ export default function App() {
         onOpenAIAssistant={() => setIsAIAssistantOpen(true)}
         onOpenAddGame={() => setIsAddGameOpen(true)}
         onOpenScanLocalLibrary={() => setIsScanLocalLibraryOpen(true)}
-        onOpenProtonManager={() => setIsProtonManagerOpen(true)}
+        onOpenProtonManager={() => {
+          setProtonManagerTab('releases');
+          setIsProtonManagerOpen(true);
+        }}
+        onOpenFlagScanner={() => {
+          setProtonManagerTab('flags-scan');
+          setIsProtonManagerOpen(true);
+        }}
         onOpenBackup={() => setIsBackupOpen(true)}
         aiEnabled={aiEnabled}
+        metrics={metrics}
+        layoutMode={layoutMode}
+        isEffectiveWide={isEffectiveWide}
+        onOpenDisplayModal={() => setIsDisplayModalOpen(true)}
+        onToggleQuickLayout={handleToggleQuickLayout}
       />
 
-      {/* Primary Layout Grid */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* Left Sidebar: Game Selector */}
-        <div className="lg:col-span-4 h-full">
-          <GameLibraryList
-            games={games}
-            selectedGameId={selectedGame.id}
-            onSelectGame={handleSelectGame}
-            onToggleFavorite={handleToggleFavorite}
-            onOpenAddGame={() => setIsAddGameOpen(true)}
-            onOpenScanLocalLibrary={() => setIsScanLocalLibraryOpen(true)}
-            onOpenSteamGridDb={(g) => {
-              setSelectedGameId(g.id);
-              setIsSteamGridDbOpen(true);
-            }}
-            onDirectLaunchGame={async (g) => {
-              setSelectedGameId(g.id);
-              try {
-                await launchSteamGame(g.appId, g.name);
-                showToast(`🚀 Dispatched Steam launch for ${g.name}`);
-              } catch {
-                showToast(`Triggered steam://rungameid/${g.appId}`);
-              }
-            }}
-            searchInputRef={searchInputRef}
-          />
-        </div>
+      {/* Primary Layout Container (Adaptive Horizontal Resolution Layout) */}
+      <main className={`flex-1 w-full mx-auto p-3 sm:p-5 lg:p-6 2xl:p-8 transition-all duration-200 ${
+        isEffectiveWide ? 'max-w-none' : 'max-w-7xl'
+      }`}>
+        {isThreeColumnMode ? (
+          /* 3-Column Ultrawide / Desktop Dashboard Layout */
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+            {/* Col 1: Game Selector */}
+            <div className="lg:col-span-3 xl:col-span-3 h-full">
+              <GameLibraryList
+                games={games}
+                selectedGameId={selectedGame.id}
+                onSelectGame={handleSelectGame}
+                onToggleFavorite={handleToggleFavorite}
+                onOpenAddGame={() => setIsAddGameOpen(true)}
+                onOpenScanLocalLibrary={() => setIsScanLocalLibraryOpen(true)}
+                onOpenSteamGridDb={(g) => {
+                  setSelectedGameId(g.id);
+                  setIsSteamGridDbOpen(true);
+                }}
+                onDirectLaunchGame={async (g) => {
+                  setSelectedGameId(g.id);
+                  try {
+                    await launchSteamGame(g.appId, g.name);
+                    showToast(`🚀 Dispatched Steam launch for ${g.name}`);
+                  } catch {
+                    showToast(`Triggered steam://rungameid/${g.appId}`);
+                  }
+                }}
+                searchInputRef={searchInputRef}
+              />
+            </div>
 
-        {/* Right Area: Proton Checklist & Live Command Preview */}
-        <div className="lg:col-span-8 flex flex-col space-y-4">
-          
-          {/* Currently Selected Game Info Bar */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-md">
-            <div className="flex items-center space-x-3">
-              <div 
-                className="w-12 h-12 rounded-lg overflow-hidden bg-slate-800 flex-shrink-0 border border-slate-700 cursor-pointer relative group/cover"
-                title="Click to edit SteamGridDB artwork"
-                onClick={() => setIsSteamGridDbOpen(true)}
-              >
-                <img
-                  src={selectedGame.bannerUrl}
-                  alt={selectedGame.name}
-                  className="w-full h-full object-cover group-hover/cover:scale-105 transition duration-200"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${selectedGame.appId}/header.jpg`;
-                  }}
-                />
-                <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover/cover:opacity-100 flex items-center justify-center transition">
-                  <ImageIcon className="w-4 h-4 text-purple-300" />
-                </div>
-              </div>
+            {/* Col 2: Proton Flag Checklist & Environment Variables */}
+            <div className="lg:col-span-5 xl:col-span-5 2xl:col-span-6 flex flex-col space-y-4">
+              <FlagChecklist
+                enabledFlags={enabledFlags}
+                onToggleFlag={handleToggleFlag}
+                customEnvVars={customEnvVars}
+                onAddCustomEnvVar={handleAddCustomEnvVar}
+                onRemoveCustomEnvVar={handleRemoveCustomEnvVar}
+                onToggleCustomEnvVar={handleToggleCustomEnvVar}
+                extraArgs={extraArgs}
+                onChangeExtraArgs={setExtraArgs}
+                distro={distro}
+                isThreeColumnMode={true}
+                onOpenFlagScanner={() => {
+                  setProtonManagerTab('flags-scan');
+                  setIsProtonManagerOpen(true);
+                }}
+                externalSearchQuery={externalFlagSearch}
+              />
+            </div>
 
-              <div>
-                <div className="flex items-center space-x-2">
-                  <h2 className="text-base font-bold text-slate-100">{selectedGame.name}</h2>
-                  <span className="bg-slate-800 text-slate-400 font-mono text-xs px-2 py-0.5 rounded-md border border-slate-700">
-                    AppID: {selectedGame.appId}
-                  </span>
-                </div>
-                <div className="text-xs text-slate-400 mt-1 flex flex-wrap items-center gap-2">
-                  <div className="flex items-center space-x-1">
-                    <span className="text-slate-400 font-medium">Runner:</span>
-                    <ProtonVersionSelector
-                      value={selectedGame.protonVersion || 'Proton Experimental'}
-                      onChange={(newVersion) => {
-                        setGames((prev) =>
-                          prev.map((g) =>
-                            g.id === selectedGame.id ? { ...g, protonVersion: newVersion } : g
-                          )
-                        );
-                        showToast(`Set Proton version for "${selectedGame.name}" to ${newVersion}`);
+            {/* Col 3: Selected Game Header Bar + Live Command Preview */}
+            <div className="lg:col-span-4 xl:col-span-4 2xl:col-span-3 flex flex-col space-y-4 sticky top-20">
+              {/* Selected Game Card */}
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 shadow-md flex flex-col space-y-3">
+                <div className="flex items-center space-x-3">
+                  <div 
+                    className="w-12 h-12 rounded-lg overflow-hidden bg-slate-800 flex-shrink-0 border border-slate-700 cursor-pointer relative group/cover"
+                    title="Click to edit SteamGridDB artwork"
+                    onClick={() => setIsSteamGridDbOpen(true)}
+                  >
+                    <img
+                      src={selectedGame.bannerUrl}
+                      alt={selectedGame.name}
+                      className="w-full h-full object-cover group-hover/cover:scale-105 transition duration-200"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${selectedGame.appId}/header.jpg`;
                       }}
                     />
+                    <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover/cover:opacity-100 flex items-center justify-center transition">
+                      <ImageIcon className="w-4 h-4 text-purple-300" />
+                    </div>
                   </div>
-                  <span>•</span>
-                  <span>Developer: {selectedGame.developer || 'Valve / Community'}</span>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center space-x-2">
+                      <h2 className="text-base font-bold text-slate-100 truncate">{selectedGame.name}</h2>
+                    </div>
+                    <div className="text-xs text-slate-400 mt-1 flex flex-wrap items-center gap-1.5">
+                      <span className="bg-slate-800 text-slate-400 font-mono text-[10px] px-1.5 py-0.5 rounded border border-slate-700">
+                        AppID: {selectedGame.appId}
+                      </span>
+                      <ProtonVersionSelector
+                        value={selectedGame.protonVersion || 'Proton Experimental'}
+                        onChange={(newVersion) => {
+                          setGames((prev) =>
+                            prev.map((g) =>
+                              g.id === selectedGame.id ? { ...g, protonVersion: newVersion } : g
+                            )
+                          );
+                          showToast(`Set Proton version for "${selectedGame.name}" to ${newVersion}`);
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-800/80">
+                  <button
+                    onClick={() => setIsWriteToSteamOpen(true)}
+                    className="bg-cyan-600 hover:bg-cyan-500 text-white font-bold px-2.5 py-1.5 rounded-xl text-xs flex items-center justify-center space-x-1.5 transition shadow-sm"
+                    title="Write & sync launch options directly to Steam localconfig.vdf"
+                  >
+                    <HardDrive className="w-3.5 h-3.5" />
+                    <span>Write Steam</span>
+                  </button>
+                  <button
+                    onClick={() => setIsSteamLauncherOpen(true)}
+                    className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold px-2.5 py-1.5 rounded-xl text-xs flex items-center justify-center space-x-1.5 transition shadow-sm"
+                    title="Launch game via Steam client"
+                  >
+                    <Rocket className="w-3.5 h-3.5" />
+                    <span>Launch</span>
+                  </button>
+                  <button
+                    onClick={() => setIsProtonDbModalOpen(true)}
+                    className="bg-amber-900/40 hover:bg-amber-900/70 text-amber-200 border border-amber-700/50 px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center space-x-1.5 transition shadow-sm"
+                  >
+                    <MessageSquareQuote className="w-3.5 h-3.5 text-amber-400" />
+                    <span>ProtonDB</span>
+                  </button>
+                  <button
+                    onClick={() => setIsSteamGridDbOpen(true)}
+                    className="bg-purple-900/40 hover:bg-purple-900/70 text-purple-200 border border-purple-700/50 px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center justify-center space-x-1.5 transition shadow-sm"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Artwork</span>
+                  </button>
                 </div>
               </div>
-            </div>
 
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => setIsWriteToSteamOpen(true)}
-                className="bg-cyan-600 hover:bg-cyan-500 text-white font-bold px-3 py-1.5 rounded-xl text-xs flex items-center space-x-1.5 transition shadow-sm"
-                title="Write & sync launch options directly to Steam localconfig.vdf"
-              >
-                <HardDrive className="w-3.5 h-3.5" />
-                <span>Write to Steam</span>
-              </button>
-              <button
-                onClick={() => setIsSteamLauncherOpen(true)}
-                className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold px-3 py-1.5 rounded-xl text-xs flex items-center space-x-1.5 transition shadow-sm"
-                title="Launch game via Steam client or export launcher shortcuts"
-              >
-                <Rocket className="w-3.5 h-3.5" />
-                <span>Launch via Steam</span>
-              </button>
-              <button
-                onClick={() => setIsSteamGridDbOpen(true)}
-                className="bg-purple-900/40 hover:bg-purple-900/70 text-purple-200 border border-purple-700/50 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm"
-                title="Manage SteamGridDB artwork covers"
-              >
-                <ImageIcon className="w-3.5 h-3.5 text-purple-400" />
-                <span>SteamGridDB Artwork</span>
-              </button>
-              <button
-                onClick={() => setIsProtonDbModalOpen(true)}
-                className="bg-amber-900/40 hover:bg-amber-900/70 text-amber-200 border border-amber-700/50 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm"
-              >
-                <MessageSquareQuote className="w-3.5 h-3.5 text-amber-400" />
-                <span>ProtonDB Advice</span>
-              </button>
-              {aiEnabled && (
-                <button
-                  onClick={() => setIsAIAssistantOpen(true)}
-                  className="bg-purple-900/40 hover:bg-purple-900/70 text-purple-200 border border-purple-700/50 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-                  <span>AI Optimizer</span>
-                </button>
-              )}
+              {/* Live Command Preview */}
+              <LiveCommandPreview
+                commandString={currentCommandString}
+                selectedGame={selectedGame}
+                onApplyCommand={handleApplyCommandToGame}
+                activeFlagNames={activeFlagNames}
+                onWriteToSteamNotice={(msg, isSuccess) => showToast(msg, isSuccess ? 'success' : 'error')}
+                onOpenWriteToSteamModal={() => setIsWriteToSteamOpen(true)}
+              />
             </div>
           </div>
+        ) : (
+          /* 2-Panel Fluid / Standard Layout */
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left Sidebar: Game Selector */}
+            <div className={`${isEffectiveWide ? 'lg:col-span-4 xl:col-span-3 2xl:col-span-3' : 'lg:col-span-4'} h-full`}>
+              <GameLibraryList
+                games={games}
+                selectedGameId={selectedGame.id}
+                onSelectGame={handleSelectGame}
+                onToggleFavorite={handleToggleFavorite}
+                onOpenAddGame={() => setIsAddGameOpen(true)}
+                onOpenScanLocalLibrary={() => setIsScanLocalLibraryOpen(true)}
+                onOpenSteamGridDb={(g) => {
+                  setSelectedGameId(g.id);
+                  setIsSteamGridDbOpen(true);
+                }}
+                onDirectLaunchGame={async (g) => {
+                  setSelectedGameId(g.id);
+                  try {
+                    await launchSteamGame(g.appId, g.name);
+                    showToast(`🚀 Dispatched Steam launch for ${g.name}`);
+                  } catch {
+                    showToast(`Triggered steam://rungameid/${g.appId}`);
+                  }
+                }}
+                searchInputRef={searchInputRef}
+              />
+            </div>
 
-          {/* Live Command Preview Box */}
-          <LiveCommandPreview
-            commandString={currentCommandString}
-            selectedGame={selectedGame}
-            onApplyCommand={handleApplyCommandToGame}
-            activeFlagNames={activeFlagNames}
-            onWriteToSteamNotice={(msg, isSuccess) => showToast(msg, isSuccess ? 'success' : 'error')}
-            onOpenWriteToSteamModal={() => setIsWriteToSteamOpen(true)}
-          />
+            {/* Right Area: Proton Checklist & Live Command Preview */}
+            <div className={`${isEffectiveWide ? 'lg:col-span-8 xl:col-span-9 2xl:col-span-9' : 'lg:col-span-8'} flex flex-col space-y-4`}>
+              {/* Currently Selected Game Info Bar */}
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 shadow-md">
+                <div className="flex items-center space-x-3">
+                  <div 
+                    className="w-12 h-12 rounded-lg overflow-hidden bg-slate-800 flex-shrink-0 border border-slate-700 cursor-pointer relative group/cover"
+                    title="Click to edit SteamGridDB artwork"
+                    onClick={() => setIsSteamGridDbOpen(true)}
+                  >
+                    <img
+                      src={selectedGame.bannerUrl}
+                      alt={selectedGame.name}
+                      className="w-full h-full object-cover group-hover/cover:scale-105 transition duration-200"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = `https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/${selectedGame.appId}/header.jpg`;
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover/cover:opacity-100 flex items-center justify-center transition">
+                      <ImageIcon className="w-4 h-4 text-purple-300" />
+                    </div>
+                  </div>
 
-          {/* Proton Flag Checklist Component */}
-          <FlagChecklist
-            enabledFlags={enabledFlags}
-            onToggleFlag={handleToggleFlag}
-            customEnvVars={customEnvVars}
-            onAddCustomEnvVar={handleAddCustomEnvVar}
-            onRemoveCustomEnvVar={handleRemoveCustomEnvVar}
-            onToggleCustomEnvVar={handleToggleCustomEnvVar}
-            extraArgs={extraArgs}
-            onChangeExtraArgs={setExtraArgs}
-            distro={distro}
-          />
-        </div>
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <h2 className="text-base font-bold text-slate-100">{selectedGame.name}</h2>
+                      <span className="bg-slate-800 text-slate-400 font-mono text-xs px-2 py-0.5 rounded-md border border-slate-700">
+                        AppID: {selectedGame.appId}
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-400 mt-1 flex flex-wrap items-center gap-2">
+                      <div className="flex items-center space-x-1">
+                        <span className="text-slate-400 font-medium">Runner:</span>
+                        <ProtonVersionSelector
+                          value={selectedGame.protonVersion || 'Proton Experimental'}
+                          onChange={(newVersion) => {
+                            setGames((prev) =>
+                              prev.map((g) =>
+                                g.id === selectedGame.id ? { ...g, protonVersion: newVersion } : g
+                              )
+                            );
+                            showToast(`Set Proton version for "${selectedGame.name}" to ${newVersion}`);
+                          }}
+                        />
+                      </div>
+                      <span>•</span>
+                      <span>Developer: {selectedGame.developer || 'Valve / Community'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => setIsWriteToSteamOpen(true)}
+                    className="bg-cyan-600 hover:bg-cyan-500 text-white font-bold px-3 py-1.5 rounded-xl text-xs flex items-center space-x-1.5 transition shadow-sm"
+                    title="Write & sync launch options directly to Steam localconfig.vdf"
+                  >
+                    <HardDrive className="w-3.5 h-3.5" />
+                    <span>Write to Steam</span>
+                  </button>
+                  <button
+                    onClick={() => setIsSteamLauncherOpen(true)}
+                    className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold px-3 py-1.5 rounded-xl text-xs flex items-center space-x-1.5 transition shadow-sm"
+                    title="Launch game via Steam client or export launcher shortcuts"
+                  >
+                    <Rocket className="w-3.5 h-3.5" />
+                    <span>Launch via Steam</span>
+                  </button>
+                  <button
+                    onClick={() => setIsSteamGridDbOpen(true)}
+                    className="bg-purple-900/40 hover:bg-purple-900/70 text-purple-200 border border-purple-700/50 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm"
+                    title="Manage SteamGridDB artwork covers"
+                  >
+                    <ImageIcon className="w-3.5 h-3.5 text-purple-400" />
+                    <span>SteamGridDB Artwork</span>
+                  </button>
+                  <button
+                    onClick={() => setIsProtonDbModalOpen(true)}
+                    className="bg-amber-900/40 hover:bg-amber-900/70 text-amber-200 border border-amber-700/50 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm"
+                  >
+                    <MessageSquareQuote className="w-3.5 h-3.5 text-amber-400" />
+                    <span>ProtonDB Advice</span>
+                  </button>
+                  {aiEnabled && (
+                    <button
+                      onClick={() => setIsAIAssistantOpen(true)}
+                      className="bg-purple-900/40 hover:bg-purple-900/70 text-purple-200 border border-purple-700/50 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 transition"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                      <span>AI Optimizer</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Live Command Preview Box */}
+              <LiveCommandPreview
+                commandString={currentCommandString}
+                selectedGame={selectedGame}
+                onApplyCommand={handleApplyCommandToGame}
+                activeFlagNames={activeFlagNames}
+                onWriteToSteamNotice={(msg, isSuccess) => showToast(msg, isSuccess ? 'success' : 'error')}
+                onOpenWriteToSteamModal={() => setIsWriteToSteamOpen(true)}
+              />
+
+              {/* Proton Flag Checklist Component */}
+              <FlagChecklist
+                enabledFlags={enabledFlags}
+                onToggleFlag={handleToggleFlag}
+                customEnvVars={customEnvVars}
+                onAddCustomEnvVar={handleAddCustomEnvVar}
+                onRemoveCustomEnvVar={handleRemoveCustomEnvVar}
+                onToggleCustomEnvVar={handleToggleCustomEnvVar}
+                extraArgs={extraArgs}
+                onChangeExtraArgs={setExtraArgs}
+                distro={distro}
+                isThreeColumnMode={false}
+                onOpenFlagScanner={() => {
+                  setProtonManagerTab('flags-scan');
+                  setIsProtonManagerOpen(true);
+                }}
+                externalSearchQuery={externalFlagSearch}
+              />
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Modals */}
@@ -610,6 +807,11 @@ export default function App() {
         isOpen={isProtonManagerOpen}
         onClose={() => setIsProtonManagerOpen(false)}
         showToast={showToast}
+        initialTab={protonManagerTab}
+        onSelectFlagToSearch={(flagKey) => {
+          setExternalFlagSearch(flagKey);
+          showToast(`Filtered checklist by ${flagKey}`);
+        }}
       />
 
       <BackupModal
@@ -634,6 +836,23 @@ export default function App() {
         game={selectedGame}
         currentLaunchOptions={currentCommandString}
         onShowToast={showToast}
+      />
+
+      <DisplayResolutionModal
+        isOpen={isDisplayModalOpen}
+        onClose={() => setIsDisplayModalOpen(false)}
+        metrics={metrics}
+        layoutMode={layoutMode}
+        onSelectLayoutMode={(mode) => {
+          setLayoutMode(mode);
+          showToast(`Display layout mode set to: ${mode}`);
+        }}
+        onChangeLayoutMode={(mode) => {
+          setLayoutMode(mode);
+          showToast(`Display layout mode set to: ${mode}`);
+        }}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={toggleBrowserFullscreen}
       />
     </div>
   );
