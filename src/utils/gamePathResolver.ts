@@ -94,6 +94,12 @@ export const KNOWN_GAME_EXECUTABLES: Record<number, { installDir: string; exeRel
     exeRelPath: 'Phoenix/Binaries/Win64/HogwartsLegacy.exe',
     exeName: 'HogwartsLegacy.exe',
   },
+  // Quake Champions
+  611500: {
+    installDir: 'Quake Champions',
+    exeRelPath: 'QuakeChampions.exe',
+    exeName: 'QuakeChampions.exe',
+  },
   // Fallout 4
   377160: {
     installDir: 'Fallout 4',
