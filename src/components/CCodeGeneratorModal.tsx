@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import { getCCodeTemplates } from '../data/cCodeTemplates';
 import { SteamGame } from '../types';
 import { PROTON_FLAGS } from '../data/protonFlagsData';
-import JSZip from 'jszip';
-import { downloadTarZstdProject } from '../utils/tarZstdPacker';
 import { 
   X, 
   Code2, 
@@ -80,6 +78,8 @@ export const CCodeGeneratorModal: React.FC<CCodeGeneratorModalProps> = ({
     setDownloading(true);
     setShowFormatDropdown(false);
     try {
+      // Dynamically import heavy zstd compression utilities on demand
+      const { downloadTarZstdProject } = await import('../utils/tarZstdPacker');
       // Map C files to tar entries, setting executable permission (0755) on build.sh and launch scripts
       const tarFiles = cFiles.map((file) => ({
         filename: file.filename,
@@ -103,6 +103,8 @@ export const CCodeGeneratorModal: React.FC<CCodeGeneratorModalProps> = ({
     setDownloading(true);
     setShowFormatDropdown(false);
     try {
+      // Dynamically import JSZip on demand
+      const { default: JSZip } = await import('jszip');
       const zip = new JSZip();
       const folder = zip.folder('proton_launch_manager');
 

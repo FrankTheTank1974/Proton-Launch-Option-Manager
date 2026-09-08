@@ -1,4 +1,4 @@
-import { ZstdInit } from '@oneidentity/zstd-js';
+import { ZstdInit } from '@oneidentity/zstd-js/wasm';
 
 export interface TarFileEntry {
   filename: string;

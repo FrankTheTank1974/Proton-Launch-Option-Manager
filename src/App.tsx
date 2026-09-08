@@ -6,24 +6,26 @@ import { Header } from './components/Header';
 import { GameLibraryList } from './components/GameLibraryList';
 import { FlagChecklist } from './components/FlagChecklist';
 import { LiveCommandPreview } from './components/LiveCommandPreview';
-import { CCodeGeneratorModal } from './components/CCodeGeneratorModal';
-import { VdfImportExportModal } from './components/VdfImportExportModal';
-import { PresetProfilesModal } from './components/PresetProfilesModal';
-import { GeminiAssistantModal } from './components/GeminiAssistantModal';
-import { AddGameModal } from './components/AddGameModal';
-import { ProtonDbModal } from './components/ProtonDbModal';
-import { ScanLocalLibraryModal } from './components/ScanLocalLibraryModal';
-import { ProtonManagerModal } from './components/ProtonManagerModal';
-import { BackupModal } from './components/BackupModal';
-import { SteamGridDbModal } from './components/SteamGridDbModal';
-import { DirectSteamLauncherModal } from './components/DirectSteamLauncherModal';
-import { WriteToSteamModal } from './components/WriteToSteamModal';
 import { ProtonVersionSelector } from './components/ProtonVersionSelector';
 import { PROTON_FLAGS } from './data/protonFlagsData';
 import { launchSteamGame } from './utils/steamLauncher';
 import { useDisplayResolution } from './utils/useDisplayResolution';
-import { DisplayResolutionModal } from './components/DisplayResolutionModal';
 import { Sparkles, Terminal, Gamepad2, ShieldCheck, CheckCircle2, AlertCircle, Info, MessageSquareQuote, Image as ImageIcon, Rocket, HardDrive } from 'lucide-react';
+
+// Lazy-loaded modal components for efficient code splitting and rapid initial load
+const CCodeGeneratorModal = React.lazy(() => import('./components/CCodeGeneratorModal').then(m => ({ default: m.CCodeGeneratorModal })));
+const VdfImportExportModal = React.lazy(() => import('./components/VdfImportExportModal').then(m => ({ default: m.VdfImportExportModal })));
+const PresetProfilesModal = React.lazy(() => import('./components/PresetProfilesModal').then(m => ({ default: m.PresetProfilesModal })));
+const GeminiAssistantModal = React.lazy(() => import('./components/GeminiAssistantModal').then(m => ({ default: m.GeminiAssistantModal })));
+const AddGameModal = React.lazy(() => import('./components/AddGameModal').then(m => ({ default: m.AddGameModal })));
+const ProtonDbModal = React.lazy(() => import('./components/ProtonDbModal').then(m => ({ default: m.ProtonDbModal })));
+const ScanLocalLibraryModal = React.lazy(() => import('./components/ScanLocalLibraryModal').then(m => ({ default: m.ScanLocalLibraryModal })));
+const ProtonManagerModal = React.lazy(() => import('./components/ProtonManagerModal').then(m => ({ default: m.ProtonManagerModal })));
+const BackupModal = React.lazy(() => import('./components/BackupModal').then(m => ({ default: m.BackupModal })));
+const SteamGridDbModal = React.lazy(() => import('./components/SteamGridDbModal').then(m => ({ default: m.SteamGridDbModal })));
+const DirectSteamLauncherModal = React.lazy(() => import('./components/DirectSteamLauncherModal').then(m => ({ default: m.DirectSteamLauncherModal })));
+const WriteToSteamModal = React.lazy(() => import('./components/WriteToSteamModal').then(m => ({ default: m.WriteToSteamModal })));
+const DisplayResolutionModal = React.lazy(() => import('./components/DisplayResolutionModal').then(m => ({ default: m.DisplayResolutionModal })));
 
 export default function App() {
   const [games, setGames] = useState<SteamGame[]>(INITIAL_STEAM_GAMES);
@@ -727,133 +729,161 @@ export default function App() {
         )}
       </main>
 
-      {/* Modals */}
-      <WriteToSteamModal
-        isOpen={isWriteToSteamOpen}
-        onClose={() => setIsWriteToSteamOpen(false)}
-        game={selectedGame}
-        launchOptions={currentCommandString}
-        allGames={games}
-        onGameUpdated={(updated) => handleApplyCommandToGame(updated.currentLaunchOptions)}
-        showToast={showToast}
-      />
+      {/* Modals with lazy loading and suspense */}
+      <React.Suspense fallback={null}>
+        {isWriteToSteamOpen && (
+          <WriteToSteamModal
+            isOpen={isWriteToSteamOpen}
+            onClose={() => setIsWriteToSteamOpen(false)}
+            game={selectedGame}
+            launchOptions={currentCommandString}
+            allGames={games}
+            onGameUpdated={(updated) => handleApplyCommandToGame(updated.currentLaunchOptions)}
+            showToast={showToast}
+          />
+        )}
 
-      <CCodeGeneratorModal
-        isOpen={isCCodeOpen}
-        onClose={() => setIsCCodeOpen(false)}
-        selectedGame={selectedGame}
-        currentCommand={currentCommandString}
-        games={games}
-      />
+        {isCCodeOpen && (
+          <CCodeGeneratorModal
+            isOpen={isCCodeOpen}
+            onClose={() => setIsCCodeOpen(false)}
+            selectedGame={selectedGame}
+            currentCommand={currentCommandString}
+            games={games}
+          />
+        )}
 
-      <VdfImportExportModal
-        isOpen={isVdfSyncOpen}
-        onClose={() => setIsVdfSyncOpen(false)}
-        games={games}
-        onImportVdfGames={handleImportVdfGames}
-        showToast={showToast}
-      />
+        {isVdfSyncOpen && (
+          <VdfImportExportModal
+            isOpen={isVdfSyncOpen}
+            onClose={() => setIsVdfSyncOpen(false)}
+            games={games}
+            onImportVdfGames={handleImportVdfGames}
+            showToast={showToast}
+          />
+        )}
 
-      <PresetProfilesModal
-        isOpen={isPresetsOpen}
-        onClose={() => setIsPresetsOpen(false)}
-        onSelectPreset={handleSelectPreset}
-      />
+        {isPresetsOpen && (
+          <PresetProfilesModal
+            isOpen={isPresetsOpen}
+            onClose={() => setIsPresetsOpen(false)}
+            onSelectPreset={handleSelectPreset}
+          />
+        )}
 
-      <GeminiAssistantModal
-        isOpen={isAIAssistantOpen}
-        onClose={() => setIsAIAssistantOpen(false)}
-        selectedGame={selectedGame}
-        distro={distro}
-        aiEnabled={aiEnabled}
-        onApplyRecommendedFlags={(cmd) => {
-          handleApplyCommandToGame(cmd);
-          const parsed = parseCommandString(cmd);
-          setEnabledFlags(parsed.enabledFlags);
-          setCustomEnvVars(parsed.customEnvVars);
-          setExtraArgs(parsed.extraArgs);
-        }}
-      />
+        {isAIAssistantOpen && (
+          <GeminiAssistantModal
+            isOpen={isAIAssistantOpen}
+            onClose={() => setIsAIAssistantOpen(false)}
+            selectedGame={selectedGame}
+            distro={distro}
+            aiEnabled={aiEnabled}
+            onApplyRecommendedFlags={(cmd) => {
+              handleApplyCommandToGame(cmd);
+              const parsed = parseCommandString(cmd);
+              setEnabledFlags(parsed.enabledFlags);
+              setCustomEnvVars(parsed.customEnvVars);
+              setExtraArgs(parsed.extraArgs);
+            }}
+          />
+        )}
 
-      <AddGameModal
-        isOpen={isAddGameOpen}
-        onClose={() => setIsAddGameOpen(false)}
-        onAddGame={handleAddGame}
-      />
+        {isAddGameOpen && (
+          <AddGameModal
+            isOpen={isAddGameOpen}
+            onClose={() => setIsAddGameOpen(false)}
+            onAddGame={handleAddGame}
+          />
+        )}
 
-      <ProtonDbModal
-        isOpen={isProtonDbModalOpen}
-        onClose={() => setIsProtonDbModalOpen(false)}
-        selectedGame={selectedGame}
-        distro={distro}
-        aiEnabled={aiEnabled}
-        onApplyRecommendedFlags={(cmd) => {
-          handleApplyCommandToGame(cmd);
-          const parsed = parseCommandString(cmd);
-          setEnabledFlags(parsed.enabledFlags);
-          setCustomEnvVars(parsed.customEnvVars);
-          setExtraArgs(parsed.extraArgs);
-          showToast('Applied ProtonDB community flags');
-        }}
-      />
+        {isProtonDbModalOpen && (
+          <ProtonDbModal
+            isOpen={isProtonDbModalOpen}
+            onClose={() => setIsProtonDbModalOpen(false)}
+            selectedGame={selectedGame}
+            distro={distro}
+            aiEnabled={aiEnabled}
+            onApplyRecommendedFlags={(cmd) => {
+              handleApplyCommandToGame(cmd);
+              const parsed = parseCommandString(cmd);
+              setEnabledFlags(parsed.enabledFlags);
+              setCustomEnvVars(parsed.customEnvVars);
+              setExtraArgs(parsed.extraArgs);
+              showToast('Applied ProtonDB community flags');
+            }}
+          />
+        )}
 
-      <ScanLocalLibraryModal
-        isOpen={isScanLocalLibraryOpen}
-        onClose={() => setIsScanLocalLibraryOpen(false)}
-        onImportGames={handleImportLocalGames}
-      />
+        {isScanLocalLibraryOpen && (
+          <ScanLocalLibraryModal
+            isOpen={isScanLocalLibraryOpen}
+            onClose={() => setIsScanLocalLibraryOpen(false)}
+            onImportGames={handleImportLocalGames}
+          />
+        )}
 
-      <ProtonManagerModal
-        isOpen={isProtonManagerOpen}
-        onClose={() => setIsProtonManagerOpen(false)}
-        showToast={showToast}
-        initialTab={protonManagerTab}
-        onSelectFlagToSearch={(flagKey) => {
-          setExternalFlagSearch(flagKey);
-          showToast(`Filtered checklist by ${flagKey}`);
-        }}
-      />
+        {isProtonManagerOpen && (
+          <ProtonManagerModal
+            isOpen={isProtonManagerOpen}
+            onClose={() => setIsProtonManagerOpen(false)}
+            showToast={showToast}
+            initialTab={protonManagerTab}
+            onSelectFlagToSearch={(flagKey) => {
+              setExternalFlagSearch(flagKey);
+              showToast(`Filtered checklist by ${flagKey}`);
+            }}
+          />
+        )}
 
-      <BackupModal
-        isOpen={isBackupOpen}
-        onClose={() => setIsBackupOpen(false)}
-        games={games}
-        onImportBackupGames={handleImportBackupGames}
-        showToast={showToast}
-      />
+        {isBackupOpen && (
+          <BackupModal
+            isOpen={isBackupOpen}
+            onClose={() => setIsBackupOpen(false)}
+            games={games}
+            onImportBackupGames={handleImportBackupGames}
+            showToast={showToast}
+          />
+        )}
 
-      <SteamGridDbModal
-        isOpen={isSteamGridDbOpen}
-        onClose={() => setIsSteamGridDbOpen(false)}
-        game={selectedGame}
-        onUpdateGameCover={handleUpdateGameCover}
-        showToast={showToast}
-      />
+        {isSteamGridDbOpen && (
+          <SteamGridDbModal
+            isOpen={isSteamGridDbOpen}
+            onClose={() => setIsSteamGridDbOpen(false)}
+            game={selectedGame}
+            onUpdateGameCover={handleUpdateGameCover}
+            showToast={showToast}
+          />
+        )}
 
-      <DirectSteamLauncherModal
-        isOpen={isSteamLauncherOpen}
-        onClose={() => setIsSteamLauncherOpen(false)}
-        game={selectedGame}
-        currentLaunchOptions={currentCommandString}
-        onShowToast={showToast}
-      />
+        {isSteamLauncherOpen && (
+          <DirectSteamLauncherModal
+            isOpen={isSteamLauncherOpen}
+            onClose={() => setIsSteamLauncherOpen(false)}
+            game={selectedGame}
+            currentLaunchOptions={currentCommandString}
+            onShowToast={showToast}
+          />
+        )}
 
-      <DisplayResolutionModal
-        isOpen={isDisplayModalOpen}
-        onClose={() => setIsDisplayModalOpen(false)}
-        metrics={metrics}
-        layoutMode={layoutMode}
-        onSelectLayoutMode={(mode) => {
-          setLayoutMode(mode);
-          showToast(`Display layout mode set to: ${mode}`);
-        }}
-        onChangeLayoutMode={(mode) => {
-          setLayoutMode(mode);
-          showToast(`Display layout mode set to: ${mode}`);
-        }}
-        isFullscreen={isFullscreen}
-        onToggleFullscreen={toggleBrowserFullscreen}
-      />
+        {isDisplayModalOpen && (
+          <DisplayResolutionModal
+            isOpen={isDisplayModalOpen}
+            onClose={() => setIsDisplayModalOpen(false)}
+            metrics={metrics}
+            layoutMode={layoutMode}
+            onSelectLayoutMode={(mode) => {
+              setLayoutMode(mode);
+              showToast(`Display layout mode set to: ${mode}`);
+            }}
+            onChangeLayoutMode={(mode) => {
+              setLayoutMode(mode);
+              showToast(`Display layout mode set to: ${mode}`);
+            }}
+            isFullscreen={isFullscreen}
+            onToggleFullscreen={toggleBrowserFullscreen}
+          />
+        )}
+      </React.Suspense>
     </div>
   );
 }

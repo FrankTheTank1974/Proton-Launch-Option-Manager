@@ -74,17 +74,28 @@ elif [ -d ".git" ] && command -v git >/dev/null 2>&1; then
     if [ "$CURRENT_BRANCH" != "$DESIRED_BRANCH" ]; then
       echo "🔀 Switching branch from '${CURRENT_BRANCH}' to '${DESIRED_BRANCH}'..."
       HAS_CHANGES=$(git status --porcelain 2>/dev/null || true)
+      STASHED_BRANCH=false
       if [ -n "$HAS_CHANGES" ]; then
         echo "⚠️ Local uncommitted changes detected. Stashing local changes before branch switch..."
-        git stash save "Auto-stashed before switching to ${DESIRED_BRANCH}" >/dev/null 2>&1 || true
+        if git stash push -u -m "Auto-stashed before switching to ${DESIRED_BRANCH}" >/dev/null 2>&1 || git stash save -u "Auto-stashed before switching to ${DESIRED_BRANCH}" >/dev/null 2>&1 || git stash save "Auto-stashed before switching to ${DESIRED_BRANCH}" >/dev/null 2>&1; then
+          STASHED_BRANCH=true
+        fi
       fi
 
       if git checkout "$DESIRED_BRANCH" 2>/dev/null || git checkout -b "$DESIRED_BRANCH" "origin/$DESIRED_BRANCH" 2>/dev/null; then
         echo "✅ Switched to branch '${DESIRED_BRANCH}'."
         CURRENT_BRANCH="$DESIRED_BRANCH"
+        chmod +x "$0" 2>/dev/null || chmod +x start.sh 2>/dev/null || true
+        git update-index --chmod=+x start.sh 2>/dev/null || true
+        if [ "$STASHED_BRANCH" = true ]; then
+          git stash pop >/dev/null 2>&1 || true
+        fi
         REINSTALL_REQUIRED=true
       else
         echo "⚠️ Could not switch to branch '${DESIRED_BRANCH}'. Staying on '${CURRENT_BRANCH}'."
+        if [ "$STASHED_BRANCH" = true ]; then
+          git stash pop >/dev/null 2>&1 || true
+        fi
       fi
     fi
 
@@ -94,18 +105,57 @@ elif [ -d ".git" ] && command -v git >/dev/null 2>&1; then
     if [ -n "$LOCAL_HASH" ] && [ -n "$REMOTE_HASH" ] && [ "$LOCAL_HASH" != "$REMOTE_HASH" ]; then
       echo "🔄 New update found on GitHub for branch '${CURRENT_BRANCH}'! Pulling latest changes..."
       HAS_CHANGES=$(git status --porcelain 2>/dev/null || true)
+      STASHED=false
       if [ -n "$HAS_CHANGES" ]; then
         echo "⚠️ Local uncommitted changes detected. Stashing local changes before update..."
-        git stash save "Auto-stashed before start.sh update" >/dev/null 2>&1 || true
+        if git stash push -u -m "Auto-stashed before start.sh update" >/dev/null 2>&1 || git stash save -u "Auto-stashed before start.sh update" >/dev/null 2>&1 || git stash save "Auto-stashed before start.sh update" >/dev/null 2>&1; then
+          STASHED=true
+        fi
       fi
 
+      PULL_SUCCESS=false
       if git pull origin "$CURRENT_BRANCH"; then
+        PULL_SUCCESS=true
+      else
+        echo "⚠️ Standard git pull encountered a conflict. Resolving untracked lockfile conflicts..."
+        # If an untracked package-lock.json or temporary lockfile would be overwritten by the merge:
+        if [ -f "package-lock.json" ]; then
+          echo "🧹 Backing up conflicting package-lock.json to package-lock.json.bak..."
+          mv package-lock.json package-lock.json.bak 2>/dev/null || rm -f package-lock.json 2>/dev/null || true
+        fi
+        if [ -f "bun.lock" ]; then
+          mv bun.lock bun.lock.bak 2>/dev/null || true
+        fi
+
+        # Reset aborted merge state and retry pull
+        git merge --abort >/dev/null 2>&1 || true
+        if git pull origin "$CURRENT_BRANCH"; then
+          PULL_SUCCESS=true
+          rm -f package-lock.json.bak bun.lock.bak 2>/dev/null || true
+        else
+          # Fallback: fetch and fast-forward to remote origin branch
+          echo "🔄 Retrying pull with origin/${CURRENT_BRANCH}..."
+          if git fetch origin "$CURRENT_BRANCH" >/dev/null 2>&1 && git merge --ff-only "origin/$CURRENT_BRANCH" >/dev/null 2>&1; then
+            PULL_SUCCESS=true
+            rm -f package-lock.json.bak bun.lock.bak 2>/dev/null || true
+          fi
+        fi
+      fi
+
+      if [ "$PULL_SUCCESS" = true ]; then
         echo "✅ Updated to latest version from GitHub (${CURRENT_BRANCH})!"
         chmod +x "$0" 2>/dev/null || chmod +x start.sh 2>/dev/null || true
         git update-index --chmod=+x start.sh 2>/dev/null || true
+        if [ "$STASHED" = true ]; then
+          echo "🔄 Restoring local changes..."
+          git stash pop >/dev/null 2>&1 || true
+        fi
         REINSTALL_REQUIRED=true
       else
         echo "⚠️ Git pull failed. Continuing with local version."
+        if [ "$STASHED" = true ]; then
+          git stash pop >/dev/null 2>&1 || true
+        fi
       fi
     else
       echo "✅ Repository branch '${CURRENT_BRANCH}' is up to date."

@@ -2,7 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { SteamGame } from '../types';
 import { launchSteamGame } from '../utils/steamLauncher';
 import { getGameExecutableInfo } from '../utils/gamePathResolver';
-import { DirectSteamLauncherModal } from './DirectSteamLauncherModal';
+
+const DirectSteamLauncherModal = React.lazy(() => import('./DirectSteamLauncherModal').then(m => ({ default: m.DirectSteamLauncherModal })));
 import {
   parseLaunchCommandTokens,
   getLaunchCommandStats,
@@ -783,13 +784,17 @@ export const LiveCommandPreview: React.FC<LiveCommandPreviewProps> = ({
       </div>
 
       {/* Direct Steam Launcher Modal */}
-      <DirectSteamLauncherModal
-        isOpen={isLauncherModalOpen}
-        onClose={() => setIsLauncherModalOpen(false)}
-        game={selectedGame}
-        currentLaunchOptions={commandString}
-        onShowToast={(msg) => onWriteToSteamNotice?.(msg, true)}
-      />
+      {isLauncherModalOpen && (
+        <React.Suspense fallback={null}>
+          <DirectSteamLauncherModal
+            isOpen={isLauncherModalOpen}
+            onClose={() => setIsLauncherModalOpen(false)}
+            game={selectedGame}
+            currentLaunchOptions={commandString}
+            onShowToast={(msg) => onWriteToSteamNotice?.(msg, true)}
+          />
+        </React.Suspense>
+      )}
 
       {/* Active Flag Badges */}
       {activeFlagNames.length > 0 && (

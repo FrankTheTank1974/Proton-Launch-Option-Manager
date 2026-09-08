@@ -329,15 +329,26 @@ npm start       # Starts standalone Node.js production server
 ## ❓ Troubleshooting & FAQs
 
 <details>
-<summary><b>npm install warnings / blocked scripts (esbuild)</b></summary>
+<summary><b>npm install warnings / blocked scripts (allowScripts)</b></summary>
 
-Modern `npm` (v10+) may block lifecycle scripts by default:
+Modern `npm` (v11+ and v12+) blocks package lifecycle scripts by default unless allowed via `allowScripts`:
 ```text
-npm warn install-scripts esbuild (postinstall: node install.js)
+npm warn install-scripts 4 packages had install scripts blocked because they are not covered by allowScripts:
+npm warn install-scripts   @google/genai (preinstall: echo 'preinstall: no-op')
+npm warn install-scripts   esbuild (postinstall: node install.js)
+npm warn install-scripts   protobufjs (postinstall: node scripts/postinstall)
 ```
-If `esbuild` binary issues occur during build, run:
+This project pre-approves trusted build scripts directly in `package.json` and `.npmrc`:
+```json
+"allowScripts": {
+  "@google/genai": true,
+  "esbuild": true,
+  "protobufjs": true
+}
+```
+If you still see this warning on a custom environment or older clone, you can approve them with:
 ```bash
-npm rebuild esbuild
+npm install-scripts approve @google/genai esbuild protobufjs
 ```
 </details>
 
