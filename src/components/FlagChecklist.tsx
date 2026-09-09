@@ -30,7 +30,9 @@ import {
   Video,
   AlertTriangle,
   ShieldAlert,
-  AlertCircle
+  AlertCircle,
+  Eye,
+  Palette,
 } from 'lucide-react';
 
 interface FlagChecklistProps {
@@ -105,14 +107,17 @@ export const FlagChecklist: React.FC<FlagChecklistProps> = ({
     { id: 'all', label: 'All Flags', icon: <CheckSquare className="w-3.5 h-3.5" /> },
     { id: 'proton_runtime', label: 'Proton Runtime & Sync', icon: <Cpu className="w-3.5 h-3.5" /> },
     { id: 'proton_ge', label: 'GE-Proton', icon: <Boxes className="w-3.5 h-3.5 text-purple-400" /> },
-    { id: 'proton_cachyos', label: 'Proton-CachyOS', icon: <Sparkles className="w-3.5 h-3.5 text-cyan-400" /> },
+    { id: 'proton_cachyos', label: 'Proton-CachyOS & Wineland', icon: <Sparkles className="w-3.5 h-3.5 text-cyan-400" /> },
     { id: 'proton_em', label: 'Proton-EM', icon: <Wrench className="w-3.5 h-3.5 text-emerald-400" /> },
     { id: 'proton_dw', label: 'Proton-DW', icon: <ShieldCheck className="w-3.5 h-3.5 text-orange-400" /> },
     { id: 'proton_rtsp', label: 'Proton-RTSP (Livestreams)', icon: <Video className="w-3.5 h-3.5 text-rose-400" /> },
+    { id: 'steamtinkerlaunch', label: 'Steam Tinker Launch (STL)', icon: <Wrench className="w-3.5 h-3.5 text-amber-400" /> },
     { id: 'boxtron', label: 'Boxtron (DOSBox)', icon: <Monitor className="w-3.5 h-3.5 text-yellow-400" /> },
     { id: 'luxtorpeda', label: 'Luxtorpeda (Native Engines)', icon: <Gamepad2 className="w-3.5 h-3.5 text-lime-400" /> },
     { id: 'roberta', label: 'Roberta (ScummVM)', icon: <Gamepad className="w-3.5 h-3.5 text-pink-400" /> },
     { id: 'lsfg_framegen', label: 'LSFG-VK FrameGen', icon: <Film className="w-3.5 h-3.5 text-fuchsia-400" /> },
+    { id: 'dlss5vk', label: 'DLSS5VK (DLSS 5 Layer)', icon: <Eye className="w-3.5 h-3.5 text-emerald-400" /> },
+    { id: 'vkbasalt', label: 'vkBasalt (Post-Processing)', icon: <Palette className="w-3.5 h-3.5 text-pink-400" /> },
     { id: 'graphics_dxvk', label: 'DXVK & NVAPI & Shaders', icon: <Zap className="w-3.5 h-3.5" /> },
     { id: 'low_latency', label: 'Low Latency Layer (LLL)', icon: <Flame className="w-3.5 h-3.5 text-amber-400" /> },
     { id: 'performance_wrappers', label: 'Wrappers & Overlays', icon: <Activity className="w-3.5 h-3.5" /> },
@@ -121,8 +126,14 @@ export const FlagChecklist: React.FC<FlagChecklistProps> = ({
   ];
 
   const searchChips = [
-    { label: 'ADD_CONFIG', query: 'ADD_CONFIG' },
+    { label: 'Steam Tinker Launch', query: 'steamtinkerlaunch' },
+    { label: 'STL', query: 'STL_' },
+    { label: 'Wineland', query: 'Wineland' },
+    { label: 'OptiScaler', query: 'OPTISCALER' },
+    { label: 'vkBasalt', query: 'VKBASALT' },
+    { label: 'DLSS5VK', query: 'DLSS5' },
     { label: 'NVAPI / DLSS', query: 'NVAPI' },
+    { label: 'ADD_CONFIG', query: 'ADD_CONFIG' },
     { label: 'FSR / FSR4', query: 'FSR' },
     { label: 'Wayland', query: 'Wayland' },
     { label: 'Topology', query: 'TOPOLOGY' },

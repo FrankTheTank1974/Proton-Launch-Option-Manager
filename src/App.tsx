@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { INITIAL_STEAM_GAMES } from './data/steamGamesData';
 import { SteamGame, CustomEnvVar, PresetProfile, VdfAppConfig } from './types';
-import { parseCommandString, generateCommandString } from './utils/commandGenerator';
+import { parseCommandString, generateCommandString, mergeLaunchCommands } from './utils/commandGenerator';
 import { Header } from './components/Header';
 import { GameLibraryList } from './components/GameLibraryList';
 import { FlagChecklist } from './components/FlagChecklist';
@@ -264,6 +264,45 @@ export default function App() {
       )
     );
     showToast(`Updated launch options for ${selectedGame.name}`);
+  };
+
+  // Apply or merge recommended flags / commands from ProtonDB advice or AI optimizer
+  const handleApplyRecommendedFlags = (cmdOrFlags: string, mode: 'merge' | 'replace' = 'merge') => {
+    if (!cmdOrFlags || !cmdOrFlags.trim()) return;
+    let finalCmd = cmdOrFlags.trim();
+    if (mode === 'merge') {
+      finalCmd = mergeLaunchCommands(currentCommandString, finalCmd);
+    }
+
+    const parsed = parseCommandString(finalCmd);
+    setEnabledFlags(parsed.enabledFlags);
+    setCustomEnvVars(parsed.customEnvVars);
+    setExtraArgs(parsed.extraArgs);
+    if (parsed.wrapperOrder && parsed.wrapperOrder.length > 0) {
+      setWrapperOrder(parsed.wrapperOrder);
+    }
+
+    setGames((prev) =>
+      prev.map((g) =>
+        g.id === selectedGame.id
+          ? {
+              ...g,
+              currentLaunchOptions: finalCmd,
+              lastUpdated: new Date().toISOString().replace('T', ' ').substring(0, 16),
+            }
+          : g
+      )
+    );
+
+    showToast(
+      mode === 'merge'
+        ? `Merged flags into live command string: ${finalCmd}`
+        : `Updated live command string: ${finalCmd}`
+    );
+  };
+
+  const handleTakeOverSingleFlag = (flag: string) => {
+    handleApplyRecommendedFlags(flag, 'merge');
   };
 
   // Global Keyboard Shortcuts (Ctrl+S, Ctrl+F, Esc)
@@ -778,13 +817,9 @@ export default function App() {
             selectedGame={selectedGame}
             distro={distro}
             aiEnabled={aiEnabled}
-            onApplyRecommendedFlags={(cmd) => {
-              handleApplyCommandToGame(cmd);
-              const parsed = parseCommandString(cmd);
-              setEnabledFlags(parsed.enabledFlags);
-              setCustomEnvVars(parsed.customEnvVars);
-              setExtraArgs(parsed.extraArgs);
-            }}
+            currentCommandString={currentCommandString}
+            onApplyRecommendedFlags={handleApplyRecommendedFlags}
+            onTakeOverSingleFlag={handleTakeOverSingleFlag}
           />
         )}
 
@@ -803,14 +838,9 @@ export default function App() {
             selectedGame={selectedGame}
             distro={distro}
             aiEnabled={aiEnabled}
-            onApplyRecommendedFlags={(cmd) => {
-              handleApplyCommandToGame(cmd);
-              const parsed = parseCommandString(cmd);
-              setEnabledFlags(parsed.enabledFlags);
-              setCustomEnvVars(parsed.customEnvVars);
-              setExtraArgs(parsed.extraArgs);
-              showToast('Applied ProtonDB community flags');
-            }}
+            currentCommandString={currentCommandString}
+            onApplyRecommendedFlags={handleApplyRecommendedFlags}
+            onTakeOverSingleFlag={handleTakeOverSingleFlag}
           />
         )}
 

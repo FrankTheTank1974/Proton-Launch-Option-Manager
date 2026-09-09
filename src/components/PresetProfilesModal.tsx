@@ -1,6 +1,6 @@
 import React from 'react';
 import { PresetProfile } from '../types';
-import { X, Sliders, Zap, Cpu, BatteryCharging, Trophy, Bug, Check } from 'lucide-react';
+import { X, Sliders, Zap, Cpu, BatteryCharging, Trophy, Bug, Check, Eye, Palette, Wrench } from 'lucide-react';
 
 interface PresetProfilesModalProps {
   isOpen: boolean;
@@ -95,6 +95,55 @@ export const PRESET_PROFILES: PresetProfile[] = [
     wrapperOrder: ['gamemoderun'],
   },
   {
+    id: 'dlss5vk_neural_rendering',
+    title: 'DLSS 5 Native Neural Rendering (DLSS5VKLayer)',
+    description: 'Enables bmitch87 DLSS5VKLayer implicit Vulkan layer with hardware Optical Flow synthetic motion vectors, DXVK-NVAPI, and GameMode priority.',
+    targetHardware: 'NVIDIA RTX GPU + Proton-CachyOS / Proton-GE (bmitch87/DLSS5VKLayer)',
+    iconName: 'Eye',
+    enabledFlags: {
+      vklayer_dlss5: true,
+      dlssnr_enable: true,
+      dlssnr_mvec: '2',
+      enable_nvapi: true,
+      gamemoderun: true,
+    },
+    customEnvVars: [],
+    extraArgs: '',
+    wrapperOrder: ['gamemoderun'],
+  },
+  {
+    id: 'vkbasalt_visual_enhancement',
+    title: 'vkBasalt Visual Post-Processing (CAS + FXAA)',
+    description: 'Enables DadSchoorse vkBasalt Vulkan post-processing layer for Contrast Adaptive Sharpening (CAS), anti-aliasing, and GameMode scheduling.',
+    targetHardware: 'All GPUs (AMD, NVIDIA, Intel) with Vulkan support',
+    iconName: 'Palette',
+    enabledFlags: {
+      enable_vkbasalt: true,
+      gamemoderun: true,
+      proton_use_ntsync: true,
+    },
+    customEnvVars: [],
+    extraArgs: '',
+    wrapperOrder: ['gamemoderun'],
+  },
+  {
+    id: 'proton_wineland_native_wayland',
+    title: 'Proton-Wineland Native Wayland & OptiScaler',
+    description: 'Bypasses XWayland with Proton-Wineland native winewayland.drv display driver, independent cursor scaling, OptiScaler nightly injection, and NTSYNC kernel synchronization.',
+    targetHardware: 'Wayland Desktop (KDE Plasma 6, GNOME 46+, COSMIC, Hyprland) + Proton-Wineland',
+    iconName: 'Zap',
+    enabledFlags: {
+      valve_proton_enable_wayland: true,
+      wineland_wayland_cursor_scale: '1.5',
+      cachyos_use_optiscaler: 'nightly',
+      proton_use_ntsync: true,
+      gamemoderun: true,
+    },
+    customEnvVars: [],
+    extraArgs: '',
+    wrapperOrder: ['gamemoderun'],
+  },
+  {
     id: 'steam_deck_battery',
     title: 'Steam Deck Battery & Performance',
     description: 'Configures Gamescope compositor with FSR upscaling and disabled shader cache to save SSD wear.',
@@ -139,6 +188,22 @@ export const PRESET_PROFILES: PresetProfile[] = [
     customEnvVars: [],
     extraArgs: '',
     wrapperOrder: [],
+  },
+  {
+    id: 'steam_tinker_launch_modding',
+    title: 'Steam Tinker Launch (STL) Modding & Custom Tools',
+    description: 'Chains Feral GameMode, MangoHud, and Steam Tinker Launch for prefix tweaking, custom companion tools, and mod organizers (Vortex/MO2).',
+    targetHardware: 'Linux Desktop & Steam Deck Power Users',
+    iconName: 'Wrench',
+    enabledFlags: {
+      steamtinkerlaunch_wrapper: true,
+      gamemoderun: true,
+      mangohud: true,
+      proton_use_ntsync: true,
+    },
+    customEnvVars: [],
+    extraArgs: '',
+    wrapperOrder: ['gamemoderun', 'mangohud', 'steamtinkerlaunch'],
   },
 ];
 

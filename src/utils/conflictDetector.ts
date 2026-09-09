@@ -39,6 +39,8 @@ export function detectFlagConflicts(
     'valve_proton_enable_amd_ags',
     'cachyos_dxvk_sarek',
     'cachyos_vkreflex',
+    'vklayer_dlss5',
+    'enable_vkbasalt',
   ].filter(isEnabled);
 
   if (isEnabled('proton_use_wine') && vulkanFeatures.length > 0) {
@@ -176,6 +178,89 @@ export function detectFlagConflicts(
       recommendation: 'Leave at least Esync or Fsync enabled (or use NTSYNC) for optimal thread synchronization.',
       autoResolveFix: {
         disableFlagIds: ['proton_no_esync', 'proton_no_fsync'],
+      },
+    });
+  }
+
+  // 10. DLSS5VK Active without PROTON_ENABLE_NVAPI
+  if (isEnabled('vklayer_dlss5') && !isEnabled('enable_nvapi')) {
+    conflicts.push({
+      id: 'dlss5vk_nvapi_recommended',
+      flagIds: ['vklayer_dlss5'],
+      severity: 'warning',
+      title: 'DLSS5VK Active without DXVK-NVAPI',
+      message: 'DLSS5VKLayer intercepts Vulkan presentation for DLSS 5 neural rendering. In Proton games, PROTON_ENABLE_NVAPI=1 is strongly recommended so DXVK exposes NVIDIA GPU vendor capabilities.',
+      recommendation: 'Enable PROTON_ENABLE_NVAPI=1 for optimal compatibility with DLSS5VKLayer.',
+      autoResolveFix: {
+        setValueMap: {
+          enable_nvapi: true,
+        },
+      },
+    });
+  }
+
+  // 11. Wayland Cursor Scaling / Monitor Set without Native Wayland Driver
+  const waylandDriverActive = isEnabled('valve_proton_enable_wayland') || isEnabled('proton_use_wayland_direct') || isEnabled('em_enable_wayland');
+  const waylandTuningActive = isEnabled('wineland_wayland_cursor_scale') || isEnabled('wineland_waylanddrv_primary_monitor');
+  if (waylandTuningActive && !waylandDriverActive) {
+    conflicts.push({
+      id: 'wayland_tuning_without_driver',
+      flagIds: ['wineland_wayland_cursor_scale', 'wineland_waylanddrv_primary_monitor'].filter(isEnabled),
+      severity: 'warning',
+      title: 'Wayland Tuning Active without Native Wayland Driver',
+      message: 'Proton-Wineland cursor scale or primary monitor overrides are configured, but the native Wine Wayland driver (PROTON_ENABLE_WAYLAND=1) is not enabled.',
+      recommendation: 'Enable PROTON_ENABLE_WAYLAND=1 so that native Wayland display driver overrides take effect.',
+      autoResolveFix: {
+        setValueMap: {
+          valve_proton_enable_wayland: true,
+        },
+      },
+    });
+  }
+
+  // 12. Steam Tinker Launch: Contradictory STL_MENU and STL_SKIP
+  if (isEnabled('stl_menu') && isEnabled('stl_skip')) {
+    conflicts.push({
+      id: 'stl_menu_vs_skip',
+      flagIds: ['stl_menu', 'stl_skip'],
+      severity: 'error',
+      title: 'Contradictory Steam Tinker Launch Flags',
+      message: 'Both STL_MENU=1 (forces GUI settings menu to open) and STL_SKIP=1 (bypasses wait prompt and menu entirely) are enabled simultaneously.',
+      recommendation: 'Disable either STL_MENU or STL_SKIP depending on whether you want interactive GUI tweaking or instant direct game launch.',
+      autoResolveFix: {
+        disableFlagIds: ['stl_skip'],
+      },
+    });
+  }
+
+  // 13. Steam Tinker Launch: Subcommand Mode without Wrapper
+  if (isEnabled('stl_subcommand_mode') && !isEnabled('steamtinkerlaunch_wrapper')) {
+    conflicts.push({
+      id: 'stl_subcommand_without_wrapper',
+      flagIds: ['stl_subcommand_mode'],
+      severity: 'warning',
+      title: 'STL Subcommand Selected without Active Wrapper',
+      message: 'A Steam Tinker Launch subcommand (e.g. menu, winecfg, vortex) is configured, but the steamtinkerlaunch wrapper is not enabled in launch options.',
+      recommendation: 'Enable the steamtinkerlaunch wrapper to execute this subcommand upon game launch.',
+      autoResolveFix: {
+        setValueMap: {
+          steamtinkerlaunch_wrapper: true,
+        },
+      },
+    });
+  }
+
+  // 14. Steam Tinker Launch: Duplicate Gamescope Compositor
+  if (isEnabled('stl_gamescope') && isEnabled('gamescope_wrapper')) {
+    conflicts.push({
+      id: 'stl_gamescope_duplicate',
+      flagIds: ['stl_gamescope', 'gamescope_wrapper'],
+      severity: 'warning',
+      title: 'Duplicate Gamescope Micro-Compositor',
+      message: 'Both STL_GAMESCOPE=1 (internal STL Gamescope injection) and the standalone gamescope command wrapper are active. Chaining both may cause nested micro-compositor failures.',
+      recommendation: 'Use either STL_GAMESCOPE=1 (managed by STL) or the standalone gamescope wrapper.',
+      autoResolveFix: {
+        disableFlagIds: ['gamescope_wrapper'],
       },
     });
   }

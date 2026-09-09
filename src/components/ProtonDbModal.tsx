@@ -17,6 +17,7 @@ import {
   Square,
   Copy,
   RotateCcw,
+  Plus,
 } from 'lucide-react';
 
 interface ProtonDbModalProps {
@@ -24,7 +25,9 @@ interface ProtonDbModalProps {
   onClose: () => void;
   selectedGame: SteamGame;
   distro: string;
-  onApplyRecommendedFlags: (commandStr: string) => void;
+  currentCommandString: string;
+  onApplyRecommendedFlags: (commandStr: string, mode?: 'merge' | 'replace') => void;
+  onTakeOverSingleFlag?: (flag: string) => void;
   aiEnabled?: boolean;
 }
 
@@ -51,7 +54,9 @@ export const ProtonDbModal: React.FC<ProtonDbModalProps> = ({
   onClose,
   selectedGame,
   distro,
+  currentCommandString,
   onApplyRecommendedFlags,
+  onTakeOverSingleFlag,
   aiEnabled = true,
 }) => {
   const [loading, setLoading] = useState(false);
@@ -60,6 +65,7 @@ export const ProtonDbModal: React.FC<ProtonDbModalProps> = ({
   const [synthesizedCommand, setSynthesizedCommand] = useState<string>('%command%');
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [takenOverFlags, setTakenOverFlags] = useState<Record<string, boolean>>({});
 
   const buildCommandFromSuggestions = (items: SelectableSuggestion[], fallbackCmd?: string): string => {
     const activeItems = items.filter((item) => item.enabled && item.flag && item.flag.trim());
@@ -69,6 +75,9 @@ export const ProtonDbModal: React.FC<ProtonDbModalProps> = ({
 
     const envVars: string[] = [];
     const wrappers: string[] = [];
+    const extraArgs: string[] = [];
+
+    const knownWrappers = ['gamemoderun', 'mangohud', 'gamescope', 'obs-gamecapture', 'game-performance', 'vkbasalt'];
 
     activeItems.forEach((item) => {
       const tokens = item.flag.trim().split(/\s+/);
@@ -76,13 +85,22 @@ export const ProtonDbModal: React.FC<ProtonDbModalProps> = ({
         if (!token || token === '%command%') return;
         if (token.includes('=')) {
           if (!envVars.includes(token)) envVars.push(token);
+        } else if (knownWrappers.some((w) => token.startsWith(w))) {
+          if (!wrappers.includes(token)) wrappers.push(token);
+        } else if (token.startsWith('-') || token.startsWith('+')) {
+          if (!extraArgs.includes(token)) extraArgs.push(token);
         } else {
+          // Default to wrappers if not an arg
           if (!wrappers.includes(token)) wrappers.push(token);
         }
       });
     });
 
-    return [...envVars, ...wrappers, '%command%'].join(' ');
+    const parts = [...envVars, ...wrappers, '%command%'];
+    if (extraArgs.length > 0) {
+      parts.push(...extraArgs);
+    }
+    return parts.join(' ').trim();
   };
 
   const parseCommentsAdviceToSuggestions = (commentsAdvice: string[]): SelectableSuggestion[] => {
@@ -119,6 +137,7 @@ export const ProtonDbModal: React.FC<ProtonDbModalProps> = ({
           gameName: selectedGame.name,
           appId: selectedGame.appId,
           distro,
+          currentCommand: currentCommandString,
         }),
       });
 
@@ -187,6 +206,12 @@ export const ProtonDbModal: React.FC<ProtonDbModalProps> = ({
       setSynthesizedCommand(buildCommandFromSuggestions(next, result?.recommendedCommand));
       return next;
     });
+  };
+
+  const handleTakeOverSingleFlag = (flag: string) => {
+    if (!flag || !flag.trim()) return;
+    onTakeOverSingleFlag?.(flag);
+    setTakenOverFlags((prev) => ({ ...prev, [flag]: true }));
   };
 
   const selectAll = () => {
@@ -362,55 +387,96 @@ export const ProtonDbModal: React.FC<ProtonDbModalProps> = ({
                 </div>
 
                 <div className="grid grid-cols-1 gap-2.5">
-                  {suggestions.map((item) => (
-                    <div
-                      key={item.id}
-                      onClick={() => toggleSuggestion(item.id)}
-                      className={`p-3 rounded-xl border transition cursor-pointer select-none flex items-start space-x-3.5 ${
-                        item.enabled
-                          ? 'bg-amber-950/20 border-amber-500/40 hover:border-amber-500/60 shadow-sm'
-                          : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 opacity-60'
-                      }`}
-                    >
-                      {/* Checkmark Button */}
+                  {suggestions.map((item) => {
+                    const isTaken = takenOverFlags[item.flag];
+
+                    return (
                       <div
-                        className={`w-5 h-5 rounded-md border flex items-center justify-center flex-shrink-0 mt-0.5 transition ${
+                        key={item.id}
+                        onClick={() => toggleSuggestion(item.id)}
+                        className={`p-3 rounded-xl border transition cursor-pointer select-none flex items-start space-x-3.5 ${
                           item.enabled
-                            ? 'bg-amber-500 border-amber-400 text-slate-950 shadow-sm'
-                            : 'bg-slate-900 border-slate-700 text-transparent'
+                            ? 'bg-amber-950/20 border-amber-500/40 hover:border-amber-500/60 shadow-sm'
+                            : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 opacity-60'
                         }`}
                       >
-                        <Check className="w-3.5 h-3.5 stroke-[3]" />
-                      </div>
-
-                      {/* Content */}
-                      <div className="flex-1 space-y-1">
-                        <div className="flex items-center justify-between flex-wrap gap-2">
-                          <span className={`font-bold text-xs ${item.enabled ? 'text-amber-200' : 'text-slate-400'}`}>
-                            {item.title}
-                          </span>
-                          {item.flag && (
-                            <code className="bg-slate-900 text-amber-300 border border-slate-800 px-2 py-0.5 rounded font-mono text-[11px]">
-                              {item.flag}
-                            </code>
-                          )}
+                        {/* Checkmark Button */}
+                        <div
+                          className={`w-5 h-5 rounded-md border flex items-center justify-center flex-shrink-0 mt-0.5 transition ${
+                            item.enabled
+                              ? 'bg-amber-500 border-amber-400 text-slate-950 shadow-sm'
+                              : 'bg-slate-900 border-slate-700 text-transparent'
+                          }`}
+                        >
+                          <Check className="w-3.5 h-3.5 stroke-[3]" />
                         </div>
-                        <p className={`text-xs leading-normal ${item.enabled ? 'text-slate-300' : 'text-slate-500'}`}>
-                          {item.description}
-                        </p>
+
+                        {/* Content */}
+                        <div className="flex-1 space-y-1">
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <span className={`font-bold text-xs ${item.enabled ? 'text-amber-200' : 'text-slate-400'}`}>
+                              {item.title}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              {item.flag && (
+                                <code className="bg-slate-900 text-amber-300 border border-slate-800 px-2 py-0.5 rounded font-mono text-[11px]">
+                                  {item.flag}
+                                </code>
+                              )}
+                              {item.flag && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleTakeOverSingleFlag(item.flag);
+                                  }}
+                                  className={`px-2 py-0.5 rounded text-[11px] font-semibold flex items-center space-x-1 transition shadow-sm border ${
+                                    isTaken
+                                      ? 'bg-emerald-950/60 text-emerald-300 border-emerald-600/50'
+                                      : 'bg-amber-500/20 hover:bg-amber-500 text-amber-200 hover:text-slate-950 border-amber-500/40'
+                                  }`}
+                                  title="Add this flag directly to Live Command String"
+                                >
+                                  {isTaken ? <Check className="w-3 h-3 text-emerald-400" /> : <Plus className="w-3 h-3" />}
+                                  <span>{isTaken ? 'Live Added!' : 'Take Over Flag'}</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <p className={`text-xs leading-normal ${item.enabled ? 'text-slate-300' : 'text-slate-500'}`}>
+                            {item.description}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
+
+              {/* Community Comments / Reports Section */}
+              {result.commentsAdvice && result.commentsAdvice.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-slate-800">
+                  <h4 className="font-bold text-slate-300 text-xs uppercase tracking-wider">
+                    Recent Community User Reports & Fixes:
+                  </h4>
+                  <div className="space-y-2">
+                    {result.commentsAdvice.map((advice, idx) => (
+                      <div key={idx} className="bg-slate-950/70 border border-slate-800/80 p-2.5 rounded-lg text-slate-300 text-xs leading-relaxed flex items-start space-x-2">
+                        <span className="text-amber-400 font-bold">•</span>
+                        <div className="flex-1">{advice}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
 
-        {/* Footer with Synthesized Launch Command */}
+        {/* Footer with Synthesized Launch Command & Merge/Replace Actions */}
         {!loading && result && (
-          <div className="p-4 bg-slate-950 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="flex-1 w-full sm:w-auto overflow-hidden">
+          <div className="p-4 bg-slate-950 border-t border-slate-800 flex flex-col md:flex-row items-center justify-between gap-3">
+            <div className="flex-1 w-full md:w-auto overflow-hidden">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[10px] uppercase font-bold text-slate-400">
                   Synthesized Selected Command:
@@ -432,10 +498,10 @@ export const ProtonDbModal: React.FC<ProtonDbModalProps> = ({
               />
             </div>
 
-            <div className="flex items-center space-x-2 w-full sm:w-auto justify-end flex-shrink-0 pt-2 sm:pt-0">
+            <div className="flex items-center space-x-2 w-full md:w-auto justify-end flex-shrink-0 pt-2 md:pt-0">
               <button
                 onClick={fetchInsights}
-                className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-1.5"
+                className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 border border-slate-700"
                 title="Re-run ProtonDB report analysis"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
@@ -443,13 +509,24 @@ export const ProtonDbModal: React.FC<ProtonDbModalProps> = ({
               </button>
               <button
                 onClick={() => {
-                  onApplyRecommendedFlags(synthesizedCommand);
+                  onApplyRecommendedFlags(synthesizedCommand, 'merge');
                   onClose();
                 }}
-                className="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition shadow-lg shadow-amber-900/30"
+                className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white px-3.5 py-2 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition shadow-lg shadow-amber-900/30"
+                title="Merge all selected flags into your Live Command String (retains other active options)"
               >
                 <Zap className="w-4 h-4 fill-current" />
-                <span>Apply Selected ({enabledCount})</span>
+                <span>Merge into Live Command</span>
+              </button>
+              <button
+                onClick={() => {
+                  onApplyRecommendedFlags(synthesizedCommand, 'replace');
+                  onClose();
+                }}
+                className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3 py-2 rounded-xl text-xs font-semibold transition"
+                title="Replace your Live Command String with this synthesized selection"
+              >
+                <span>Replace Live Command</span>
               </button>
             </div>
           </div>
@@ -458,4 +535,5 @@ export const ProtonDbModal: React.FC<ProtonDbModalProps> = ({
     </div>
   );
 };
+
 

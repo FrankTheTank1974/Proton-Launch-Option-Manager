@@ -42,7 +42,7 @@ export default defineConfig(() => {
           },
         },
       },
-      chunkSizeWarningLimit: 3000,
+      chunkSizeWarningLimit: 5000,
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.

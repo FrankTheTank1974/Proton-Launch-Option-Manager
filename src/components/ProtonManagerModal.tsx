@@ -153,9 +153,45 @@ export const ProtonManagerModal: React.FC<ProtonManagerModalProps> = ({
     try {
       const res = await fetch('/api/proton-runners/scan-flags');
       const data = await res.json();
-      if (data.success) {
-        setFlagScanResults(data);
-        showToast?.(`Found ${data.totalUniqueFlags} flags across ${data.sourcesScanned.length} runner repositories!`);
+      if (data && data.success) {
+        // Normalize sources list safely
+        const rawSources = data.sourcesScanned || data.runnerSources || [];
+        const normalizedSources = Array.isArray(rawSources)
+          ? rawSources.map((s: any) => ({
+              id: s.id || s.name || 'runner',
+              name: s.name || s.id || 'Runner',
+              url: s.url || s.webUrl || '',
+              branch: s.branch || 'main',
+              status: typeof s.status === 'number' ? s.status : (s.httpStatus || (s.status === 'ok' ? 200 : 500)),
+              flagsFound: typeof s.flagsFound === 'number' ? s.flagsFound : (s.flagsCount || (Array.isArray(s.flags) ? s.flags.length : 0)),
+            }))
+          : [];
+
+        // Normalize discovered flags list safely
+        const rawFlags = data.discoveredFlags || [];
+        const normalizedFlags = Array.isArray(rawFlags)
+          ? rawFlags.map((f: any) => {
+              if (typeof f === 'string') {
+                return { key: f, sources: ['Upstream'], count: 1 };
+              }
+              return {
+                key: f?.key || '',
+                sources: Array.isArray(f?.sources) ? f.sources : ['Upstream'],
+                count: typeof f?.count === 'number' ? f.count : 1,
+              };
+            }).filter((f: any) => Boolean(f.key))
+          : [];
+
+        const normalizedData = {
+          success: true,
+          totalUniqueFlags: typeof data.totalUniqueFlags === 'number' ? data.totalUniqueFlags : normalizedFlags.length,
+          sourcesScanned: normalizedSources,
+          discoveredFlags: normalizedFlags,
+          scannedAt: data.scannedAt || new Date().toISOString(),
+        };
+
+        setFlagScanResults(normalizedData);
+        showToast?.(`Found ${normalizedData.totalUniqueFlags} flags across ${normalizedSources.length} runner repositories!`);
       } else {
         setStatusMessage({ text: 'Error scanning runner flags from GitHub.', isError: true });
       }
@@ -363,6 +399,14 @@ export const ProtonManagerModal: React.FC<ProtonManagerModalProps> = ({
         return <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">🐺 Proton-EM</span>;
       case 'dw':
         return <span className="bg-purple-500/10 text-purple-400 border border-purple-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">🛠️ Proton-DW</span>;
+      case 'dlss5vk':
+        return <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">👁️ DLSS5VKLayer</span>;
+      case 'vkbasalt':
+        return <span className="bg-pink-500/10 text-pink-400 border border-pink-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">🎨 vkBasalt</span>;
+      case 'wineland':
+        return <span className="bg-rose-500/10 text-rose-400 border border-rose-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">🍷 Proton-Wineland</span>;
+      case 'steamtinkerlaunch':
+        return <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">🔧 Steam Tinker Launch</span>;
       default:
         return <span className="bg-slate-700 text-slate-300 text-[10px] font-bold px-2 py-0.5 rounded-full">Custom Runner</span>;
     }
@@ -618,6 +662,10 @@ export const ProtonManagerModal: React.FC<ProtonManagerModalProps> = ({
                   { id: 'roberta', label: '📜 Roberta' },
                   { id: 'em', label: '🐺 Proton-EM' },
                   { id: 'dw', label: '🛠️ Proton-DW' },
+                  { id: 'dlss5vk', label: '👁️ DLSS5VKLayer' },
+                  { id: 'vkbasalt', label: '🎨 vkBasalt' },
+                  { id: 'wineland', label: '🍷 Proton-Wineland' },
+                  { id: 'steamtinkerlaunch', label: '🔧 Steam Tinker Launch' },
                 ].map((p) => (
                   <button
                     key={p.id}
@@ -1135,7 +1183,7 @@ export const ProtonManagerModal: React.FC<ProtonManagerModalProps> = ({
 
                               {/* Description / Tooltip */}
                               <p className="text-[11px] text-slate-400 leading-relaxed">
-                                {matchedProto ? matchedProto.description : `Discovered across ${flag.sources.join(', ')} runner codebase.`}
+                                {matchedProto ? matchedProto.description : `Discovered across ${(flag.sources || []).join(', ') || 'upstream'} runner codebase.`}
                               </p>
                             </div>
 
@@ -1143,7 +1191,7 @@ export const ProtonManagerModal: React.FC<ProtonManagerModalProps> = ({
                             <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-900 text-[10px]">
                               <div className="flex flex-wrap items-center gap-1">
                                 <span className="text-slate-500 font-mono text-[9px]">Sources:</span>
-                                {flag.sources.map((s) => (
+                                {(flag.sources || []).map((s) => (
                                   <span
                                     key={s}
                                     className="bg-slate-900 text-slate-300 border border-slate-800 px-1.5 py-0.5 rounded text-[9px] font-mono"

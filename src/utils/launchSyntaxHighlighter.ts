@@ -91,6 +91,7 @@ const KNOWN_WRAPPERS = new Set([
   'strace',
   'renderdoccmd',
   'game-performance',
+  'dlssnr-helper',
 ]);
 
 /**

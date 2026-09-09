@@ -1130,6 +1130,34 @@ Return ONLY valid JSON.`,
       desc: 'DirectWay / Wine-GE Proton variant optimized for standalone Wine, Direct3D, and Wayland games.',
       icon: '🛠️',
     },
+    dlss5vk: {
+      name: 'DLSS5VKLayer (DLSS 5 Vulkan Layer)',
+      repo: 'bmitch87/DLSS5VKLayer',
+      providerType: 'github',
+      desc: 'Linux Native DLSS 5 Vulkan layer + NGX neural rendering helper by bmitch87 with Optical Flow motion vectors and HDR.',
+      icon: '👁️',
+    },
+    vkbasalt: {
+      name: 'vkBasalt (Vulkan Post-Processing Layer)',
+      repo: 'DadSchoorse/vkbasalt',
+      providerType: 'github',
+      desc: 'Vulkan post-processing layer by DadSchoorse featuring CAS sharpening, DLS, FXAA, SMAA, 3D LUT, and ReShade FX shaders.',
+      icon: '🎨',
+    },
+    wineland: {
+      name: 'Proton-Wineland (Proton-CachyOS Wayland)',
+      repo: 'nanomatters/proton-cachyos',
+      providerType: 'github',
+      desc: 'Proton-Wineland by nanomatters: bleeding-edge Proton-CachyOS build featuring native Wayland driver, OptiScaler, x86_64_v3 / WoW64 builds, and custom HUD.',
+      icon: '🍷',
+    },
+    steamtinkerlaunch: {
+      name: 'Steam Tinker Launch (STL)',
+      repo: 'sonic2kk/steamtinkerlaunch',
+      providerType: 'github',
+      desc: 'Versatile Linux wrapper tool for Steam client by sonic2kk enabling game configuration menus, Proton switching, GameScope/GameMode injection, Vortex/MO2 modding, and third-party tools.',
+      icon: '🔧',
+    },
   };
 
   // Helper to detect host CPU architecture & flags
@@ -1348,6 +1376,16 @@ Return ONLY valid JSON.`,
           rawAssets = rawAssets.filter((a: any) => a.name && a.name.toLowerCase().startsWith('boxtron'));
         } else if (providerKey === 'roberta') {
           rawAssets = rawAssets.filter((a: any) => a.name && a.name.toLowerCase().startsWith('roberta'));
+        } else if (providerKey === 'steamtinkerlaunch' && rawAssets.length === 0) {
+          const tag = rel.tag_name || 'latest';
+          rawAssets = [
+            {
+              name: `steamtinkerlaunch-${tag}.tar.gz`,
+              browser_download_url: `https://github.com/${repoOwnerAndName}/archive/refs/tags/${tag}.tar.gz`,
+              size: 1572864,
+              download_count: 0,
+            }
+          ];
         }
 
         const processedAssets = rawAssets
@@ -1528,6 +1566,46 @@ Return ONLY valid JSON.`,
           webUrl: 'https://github.com/doitsujin/dxvk',
           icon: '🛡️',
         },
+        {
+          id: 'dlss5vk-layer',
+          name: 'DLSS5VKLayer (bmitch87)',
+          repo: 'bmitch87/DLSS5VKLayer',
+          branch: 'master',
+          file: 'README.md',
+          url: 'https://raw.githubusercontent.com/bmitch87/DLSS5VKLayer/master/README.md',
+          webUrl: 'https://github.com/bmitch87/DLSS5VKLayer',
+          icon: '👁️',
+        },
+        {
+          id: 'vkbasalt-layer',
+          name: 'vkBasalt (DadSchoorse)',
+          repo: 'DadSchoorse/vkbasalt',
+          branch: 'master',
+          file: 'README.md',
+          url: 'https://raw.githubusercontent.com/DadSchoorse/vkbasalt/master/README.md',
+          webUrl: 'https://github.com/DadSchoorse/vkbasalt',
+          icon: '🎨',
+        },
+        {
+          id: 'proton-wineland',
+          name: 'Proton-Wineland (nanomatters)',
+          repo: 'nanomatters/proton-cachyos',
+          branch: 'cachyos_main',
+          file: 'README.md',
+          url: 'https://raw.githubusercontent.com/nanomatters/proton-cachyos/cachyos_main/README.md',
+          webUrl: 'https://github.com/nanomatters/proton-cachyos',
+          icon: '🍷',
+        },
+        {
+          id: 'steamtinkerlaunch',
+          name: 'Steam Tinker Launch (sonic2kk)',
+          repo: 'sonic2kk/steamtinkerlaunch',
+          branch: 'master',
+          file: 'README.md',
+          url: 'https://raw.githubusercontent.com/sonic2kk/steamtinkerlaunch/master/README.md',
+          webUrl: 'https://github.com/sonic2kk/steamtinkerlaunch',
+          icon: '🔧',
+        },
       ];
 
       const scanPromises = runnerSources.map(async (source) => {
@@ -1557,14 +1635,16 @@ Return ONLY valid JSON.`,
 
           const text = await resp.text();
           // Extract known flag prefixes
-          const matched = text.match(/\b(?:PROTON|WINE|DXVK|VKD3D|RADV|GST|UMU|LOW_LATENCY_LAYER)_[A-Z0-9_]+\b/g);
+          const matched = text.match(/\b(?:PROTON|WINE|DXVK|VKD3D|RADV|GST|UMU|LOW_LATENCY_LAYER|VKBASALT|WAYLANDDRV|STL)_[A-Z0-9_]+\b/g);
           const flagMatches: string[] = matched ? Array.from(matched) : [];
           
           // Special runtime wrappers and commands
           const extraPatterns = [
             'gamemoderun', 'game-performance', 'gamescope', 'mangohud', 
             'obs-gamecapture', 'pyroveil', 'vkbasalt', 'DXVK_NVAPI_VKREFLEX',
-            'ENABLE_LSFG', 'ENABLE_VKBASALT', 'DISABLE_SHADER_CACHE'
+            'ENABLE_LSFG', 'ENABLE_VKBASALT', 'DISABLE_SHADER_CACHE',
+            'steamtinkerlaunch', 'STL_MENU', 'STL_SKIP', 'STL_WAIT', 'STL_NOLOG',
+            'STL_DEBUG', 'STL_EXTCMD', 'STL_VR', 'STL_GAMESCOPE'
           ];
           for (const pattern of extraPatterns) {
             if (text.includes(pattern)) {
@@ -1574,6 +1654,7 @@ Return ONLY valid JSON.`,
 
           // Deduplicate and filter out internal noise
           const uniqueFlags = Array.from(new Set(flagMatches)).filter(f => 
+            typeof f === 'string' &&
             f.length >= 4 && 
             !f.endsWith('_H') && 
             !f.endsWith('_CPP') && 
@@ -1603,15 +1684,41 @@ Return ONLY valid JSON.`,
       const scanResults = await Promise.all(scanPromises);
 
       // Collect union of all discovered unique flags across all runners
-      const allUniqueDiscovered = Array.from(new Set(scanResults.flatMap(r => r.flags))).sort();
+      const allUniqueDiscovered = Array.from(new Set(scanResults.flatMap(r => (r && Array.isArray(r.flags) ? r.flags : [])))).filter(Boolean).sort();
+
+      // Build rich flag mapping with sources and occurrences
+      const flagSourcesMap: Record<string, { key: string; sources: string[]; count: number }> = {};
+      for (const r of scanResults) {
+        for (const flag of r.flags || []) {
+          if (!flagSourcesMap[flag]) {
+            flagSourcesMap[flag] = { key: flag, sources: [], count: 0 };
+          }
+          if (!flagSourcesMap[flag].sources.includes(r.name)) {
+            flagSourcesMap[flag].sources.push(r.name);
+          }
+          flagSourcesMap[flag].count++;
+        }
+      }
+      const discoveredFlagsList = Object.values(flagSourcesMap).sort((a, b) => a.key.localeCompare(b.key));
+
+      // Build sourcesScanned formatted for UI
+      const sourcesScannedList = scanResults.map(r => ({
+        id: r.id,
+        name: r.name,
+        url: r.webUrl || r.url,
+        branch: r.branch,
+        status: r.httpStatus || (r.status === 'ok' ? 200 : 500),
+        flagsFound: r.flagsCount || r.flags?.length || 0,
+      }));
 
       return res.json({
         success: true,
         scannedAt: new Date().toISOString(),
         totalSourcesScanned: runnerSources.length,
         successfulSources: scanResults.filter(r => r.status === 'ok').length,
-        totalUniqueFlags: allUniqueDiscovered.length,
-        discoveredFlags: allUniqueDiscovered,
+        totalUniqueFlags: discoveredFlagsList.length,
+        discoveredFlags: discoveredFlagsList,
+        sourcesScanned: sourcesScannedList,
         runnerSources: scanResults,
       });
     } catch (err: any) {

@@ -33,6 +33,11 @@ const DEFAULT_PROTON_PRESETS = [
   'GE-Proton9-25',
   'GE-Proton9-20',
   'GE-Proton8-32',
+  'Proton-Wineland-11.0',
+  'Proton-CachyOS-Wineland',
+  'Proton-CachyOS',
+  'Steam-Tinker-Launch',
+  'SteamTinkerLaunch (STL)',
   'Proton-RTSP',
   'Proton-RTSP-9.0',
 ];

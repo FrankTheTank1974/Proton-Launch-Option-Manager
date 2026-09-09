@@ -12,20 +12,25 @@ export function parseCommandString(commandStr: string): CommandState {
   const enabledFlags: Record<string, string | boolean> = {};
   const customEnvVars: CustomEnvVar[] = [];
   const wrapperOrder: string[] = [];
+  const extraArgsList: string[] = [];
 
-  if (!commandStr) {
+  if (!commandStr || !commandStr.trim()) {
     return {
       enabledFlags: {},
       customEnvVars: [],
       extraArgs: '',
-      wrapperOrder: ['obs-gamecapture', 'mangohud', 'gamemoderun', 'game-performance', 'gamescope'],
+      wrapperOrder: ['obs-gamecapture', 'mangohud', 'gamemoderun', 'game-performance', 'steamtinkerlaunch', 'gamescope'],
     };
   }
 
   // Split around %command%
   const parts = commandStr.split('%command%');
   const beforeCmd = (parts[0] || '').trim();
-  const extraArgs = (parts[1] || '').trim();
+  const afterCmd = parts.length > 1 ? (parts.slice(1).join(' ') || '').trim() : '';
+
+  if (afterCmd) {
+    extraArgsList.push(afterCmd);
+  }
 
   // Match key="value" or key='value' or key=value
   const envVarRegex = /([A-Za-z0-9_]+)=(?:"([^"]*)"|'([^']*)'|(\S+))/g;
@@ -56,9 +61,10 @@ export function parseCommandString(commandStr: string): CommandState {
     }
   }
 
-  // Process remaining standalone wrapper tokens (like gamemoderun, mangohud, gamescope)
+  // Process remaining tokens before %command%
   const remainingTokens = remainingText.split(/\s+/).filter(Boolean);
-  remainingTokens.forEach((token) => {
+  for (let i = 0; i < remainingTokens.length; i++) {
+    const token = remainingTokens[i];
     const matchedWrapper = PROTON_FLAGS.find(
       (f) => f.isWrapper && (f.key === token || token.startsWith(f.key))
     );
@@ -67,17 +73,83 @@ export function parseCommandString(commandStr: string): CommandState {
       if (!wrapperOrder.includes(matchedWrapper.key)) {
         wrapperOrder.push(matchedWrapper.key);
       }
+      if (matchedWrapper.key === 'steamtinkerlaunch' && i + 1 < remainingTokens.length) {
+        const next = remainingTokens[i + 1];
+        const knownModes = ['menu', 'game', 'winecfg', 'regedit', 'taskmgr', 'cmd', 'vortex', 'mo2', 'hmm', 'open', 'configdir'];
+        if (knownModes.includes(next)) {
+          enabledFlags['stl_subcommand_mode'] = next;
+          i++; // advance past subcommand
+        }
+      }
+    } else if (token !== '%command%') {
+      // Standalone parameter or flag (e.g. -novid, --skip-launcher, +fps_max)
+      extraArgsList.push(token);
     }
-  });
+  }
 
   return {
     enabledFlags,
     customEnvVars,
-    extraArgs,
+    extraArgs: extraArgsList.join(' ').trim(),
     wrapperOrder: wrapperOrder.length
       ? wrapperOrder
-      : ['obs-gamecapture', 'mangohud', 'gamemoderun', 'game-performance', 'gamescope'],
+      : ['obs-gamecapture', 'mangohud', 'gamemoderun', 'game-performance', 'steamtinkerlaunch', 'gamescope'],
   };
+}
+
+/**
+ * Merge an incoming set of flags or command string into an existing base command string.
+ * Incoming flags/values take precedence or get appended, without deleting existing options.
+ */
+export function mergeLaunchCommands(baseCommand: string, incomingFlagsOrCommand: string): string {
+  if (!incomingFlagsOrCommand || !incomingFlagsOrCommand.trim()) {
+    return baseCommand || '%command%';
+  }
+  if (!baseCommand || !baseCommand.trim()) {
+    return incomingFlagsOrCommand.trim();
+  }
+
+  const base = parseCommandString(baseCommand);
+  const incoming = parseCommandString(incomingFlagsOrCommand);
+
+  // Merge flags
+  const mergedFlags: Record<string, string | boolean> = { ...base.enabledFlags };
+  Object.entries(incoming.enabledFlags).forEach(([id, val]) => {
+    if (val !== undefined && val !== false && val !== '') {
+      mergedFlags[id] = val;
+    }
+  });
+
+  // Merge custom environment variables
+  const mergedCustom = [...base.customEnvVars];
+  incoming.customEnvVars.forEach((inc) => {
+    const existingIndex = mergedCustom.findIndex((c) => c.key.toLowerCase() === inc.key.toLowerCase());
+    if (existingIndex >= 0) {
+      mergedCustom[existingIndex] = { ...inc, enabled: true };
+    } else {
+      mergedCustom.push({ ...inc, enabled: true });
+    }
+  });
+
+  // Merge extra game arguments
+  const baseArgs = base.extraArgs.split(/\s+/).filter(Boolean);
+  const incArgs = incoming.extraArgs.split(/\s+/).filter(Boolean);
+  const mergedArgsTokens = [...baseArgs];
+  incArgs.forEach((a) => {
+    if (!mergedArgsTokens.includes(a)) {
+      mergedArgsTokens.push(a);
+    }
+  });
+
+  // Merge wrappers in order
+  const mergedWrapperOrder = [...base.wrapperOrder];
+  incoming.wrapperOrder.forEach((w) => {
+    if (!mergedWrapperOrder.includes(w)) {
+      mergedWrapperOrder.push(w);
+    }
+  });
+
+  return generateCommandString(mergedFlags, mergedCustom, mergedArgsTokens.join(' ').trim(), mergedWrapperOrder);
 }
 
 export function generateCommandString(
@@ -137,6 +209,13 @@ export function generateCommandString(
   sortedWrappers.forEach((w) => {
     if (w.key === 'gamescope') {
       wrappers.push('gamescope -w 1920 -h 1080 -r 144 -f --');
+    } else if (w.key === 'steamtinkerlaunch') {
+      const mode = enabledFlags['stl_subcommand_mode'];
+      if (typeof mode === 'string' && mode.trim()) {
+        wrappers.push(`steamtinkerlaunch ${mode.trim()}`);
+      } else {
+        wrappers.push('steamtinkerlaunch');
+      }
     } else {
       wrappers.push(w.key);
     }

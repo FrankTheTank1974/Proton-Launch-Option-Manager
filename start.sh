@@ -114,8 +114,22 @@ elif [ -d ".git" ] && command -v git >/dev/null 2>&1; then
       fi
 
       PULL_SUCCESS=false
+
+      # Preemptively handle untracked package-lock.json or bun.lock before pull to avoid git merge overwrite aborts
+      if [ -f "package-lock.json" ]; then
+        if ! git ls-files --error-unmatch package-lock.json >/dev/null 2>&1; then
+          mv package-lock.json package-lock.json.bak 2>/dev/null || rm -f package-lock.json 2>/dev/null || true
+        fi
+      fi
+      if [ -f "bun.lock" ]; then
+        if ! git ls-files --error-unmatch bun.lock >/dev/null 2>&1; then
+          mv bun.lock bun.lock.bak 2>/dev/null || rm -f bun.lock 2>/dev/null || true
+        fi
+      fi
+
       if git pull origin "$CURRENT_BRANCH"; then
         PULL_SUCCESS=true
+        rm -f package-lock.json.bak bun.lock.bak 2>/dev/null || true
       else
         echo "⚠️ Standard git pull encountered a conflict. Resolving untracked lockfile conflicts..."
         # If an untracked package-lock.json or temporary lockfile would be overwritten by the merge:
