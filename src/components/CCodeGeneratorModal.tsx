@@ -21,7 +21,8 @@ import {
   Layers, 
   Archive, 
   ChevronDown,
-  BookOpen
+  BookOpen,
+  FlaskConical
 } from 'lucide-react';
 
 interface CCodeGeneratorModalProps {
@@ -135,6 +136,7 @@ export const CCodeGeneratorModal: React.FC<CCodeGeneratorModalProps> = ({
     if (filename.includes('scanner')) return <Search className={iconClass} />;
     if (filename.includes('backup')) return <History className={iconClass} />;
     if (filename.includes('launcher')) return <Play className={iconClass} />;
+    if (filename.includes('runtime') || filename.includes('test')) return <FlaskConical className={iconClass} />;
     if (filename.includes('tui') || filename.includes('cli') || filename.endsWith('.sh')) {
       return <Terminal className={iconClass} />;
     }
@@ -168,7 +170,7 @@ export const CCodeGeneratorModal: React.FC<CCodeGeneratorModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Includes Conflict Detector, Presets, Library Scanner, VDF Backups, ANSI TUI & Steam Launcher
+                Includes Steam Runtime Pipeline Simulator, Proton Switcher (config.vdf), Steam Tinker Launch, Conflicts, Presets, Scanner, VDF Backups, ANSI TUI & Launcher
               </p>
             </div>
           </div>
@@ -250,6 +252,12 @@ export const CCodeGeneratorModal: React.FC<CCodeGeneratorModalProps> = ({
           <span className="text-slate-500 font-semibold uppercase tracking-wider text-[10px] flex items-center gap-1 shrink-0">
             <Layers className="w-3.5 h-3.5 text-cyan-400" /> Embedded Offline Modules:
           </span>
+          <span className="bg-slate-900 border border-slate-700/60 px-2 py-0.5 rounded text-rose-300 shrink-0">
+            🍷 Proton Switcher (config.vdf)
+          </span>
+          <span className="bg-slate-900 border border-slate-700/60 px-2 py-0.5 rounded text-amber-300 shrink-0">
+            🔧 Steam Tinker Launch (STL)
+          </span>
           <span className="bg-slate-900 border border-slate-700/60 px-2 py-0.5 rounded text-amber-300 shrink-0">
             🛡️ Conflict Detector
           </span>
@@ -264,9 +272,6 @@ export const CCodeGeneratorModal: React.FC<CCodeGeneratorModalProps> = ({
           </span>
           <span className="bg-slate-900 border border-slate-700/60 px-2 py-0.5 rounded text-sky-300 shrink-0">
             🖥️ ANSI Terminal TUI
-          </span>
-          <span className="bg-slate-900 border border-slate-700/60 px-2 py-0.5 rounded text-rose-300 shrink-0">
-            🚀 Steam URI Launcher
           </span>
           <span className="bg-slate-900 border border-slate-700/60 px-2 py-0.5 rounded text-teal-300 shrink-0">
             📖 UNIX Manpage (.1)
@@ -310,8 +315,13 @@ export const CCodeGeneratorModal: React.FC<CCodeGeneratorModalProps> = ({
                 <div className="select-all text-slate-300">tar --zstd -xvf *.tar.zst</div>
                 <div className="text-cyan-400 font-semibold pt-1"># 2. Run builder (already +x):</div>
                 <div className="select-all text-slate-300">cd proton_launch_manager && ./build.sh</div>
-                <div className="text-cyan-400 font-semibold pt-1"># 3. Interactive ANSI TUI:</div>
+                <div className="text-cyan-400 font-semibold pt-1"># 3. Interactive TUI:</div>
                 <div className="select-all text-slate-300">./proton_cli -i</div>
+                <div className="text-amber-400 font-semibold pt-1"># 4. Switch Proton runner:</div>
+                <div className="select-all text-slate-300">./proton_cli --list-proton</div>
+                <div className="select-all text-slate-300">./proton_cli -g {selectedGame.appId} --set-proton GE-Proton9-25</div>
+                <div className="text-purple-400 font-semibold pt-1"># 5. Steam Tinker Launch:</div>
+                <div className="select-all text-slate-300">./proton_cli -g {selectedGame.appId} --stl --stl-mode mo2</div>
               </div>
             </div>
           </div>
