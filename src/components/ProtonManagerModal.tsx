@@ -399,12 +399,12 @@ export const ProtonManagerModal: React.FC<ProtonManagerModalProps> = ({
         return <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">🐺 Proton-EM</span>;
       case 'dw':
         return <span className="bg-purple-500/10 text-purple-400 border border-purple-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">🛠️ Proton-DW</span>;
-      case 'dlss5vk':
-        return <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">👁️ DLSS5VKLayer</span>;
-      case 'vkbasalt':
-        return <span className="bg-pink-500/10 text-pink-400 border border-pink-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">🎨 vkBasalt</span>;
       case 'wineland':
         return <span className="bg-rose-500/10 text-rose-400 border border-rose-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">🍷 Proton-Wineland</span>;
+      case 'kron4ek':
+        return <span className="bg-fuchsia-500/10 text-fuchsia-400 border border-fuchsia-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">🍷 Kron4ek Proton</span>;
+      case 'kron4ek_archive':
+        return <span className="bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">🏛️ Kron4ek Archive</span>;
       case 'steamtinkerlaunch':
         return <span className="bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">🔧 Steam Tinker Launch</span>;
       default:
@@ -662,9 +662,9 @@ export const ProtonManagerModal: React.FC<ProtonManagerModalProps> = ({
                   { id: 'roberta', label: '📜 Roberta' },
                   { id: 'em', label: '🐺 Proton-EM' },
                   { id: 'dw', label: '🛠️ Proton-DW' },
-                  { id: 'dlss5vk', label: '👁️ DLSS5VKLayer' },
-                  { id: 'vkbasalt', label: '🎨 vkBasalt' },
                   { id: 'wineland', label: '🍷 Proton-Wineland' },
+                  { id: 'kron4ek', label: '🍷 Kron4ek Proton' },
+                  { id: 'kron4ek_archive', label: '🏛️ Kron4ek Archive' },
                   { id: 'steamtinkerlaunch', label: '🔧 Steam Tinker Launch' },
                 ].map((p) => (
                   <button

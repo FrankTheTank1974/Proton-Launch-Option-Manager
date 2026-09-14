@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { SteamGame } from '../types';
 import { launchSteamGame } from '../utils/steamLauncher';
-import { getGameExecutableInfo } from '../utils/gamePathResolver';
+import { getGameExecutableInfo, resolveProtonRunnerInfo } from '../utils/gamePathResolver';
 
 const DirectSteamLauncherModal = React.lazy(() => import('./DirectSteamLauncherModal').then(m => ({ default: m.DirectSteamLauncherModal })));
 import {
@@ -61,6 +61,10 @@ export const LiveCommandPreview: React.FC<LiveCommandPreviewProps> = ({
   const [readingSteam, setReadingSteam] = useState(false);
   const [launchingSteam, setLaunchingSteam] = useState(false);
   const [showSimulator, setShowSimulator] = useState(false);
+  const [copiedStandalone, setCopiedStandalone] = useState(false);
+  const [copiedEvaluated, setCopiedEvaluated] = useState(false);
+  const [copiedSteamRun, setCopiedSteamRun] = useState(false);
+  const [includeProtonLog, setIncludeProtonLog] = useState(false);
   const [isLauncherModalOpen, setIsLauncherModalOpen] = useState(false);
 
   // Syntax highlighting state
@@ -821,28 +825,69 @@ export const LiveCommandPreview: React.FC<LiveCommandPreviewProps> = ({
           selectedGame.installDirName
         );
 
-        // Proton binary path based on selected runner
-        const runnerPath = selectedGame.protonVersion.includes('GE')
-          ? `~/.local/share/Steam/compatibilitytools.d/${selectedGame.protonVersion.replace(/\s+/g, '_')}/proton`
-          : `~/.local/share/Steam/steamapps/common/${selectedGame.protonVersion.replace(/[\s-]+/g, ' ')}/proton`;
+        // Resolve exact Proton binary path and folder based on selected runner
+        const runnerInfo = resolveProtonRunnerInfo(selectedGame.protonVersion);
+        const runnerPath = runnerInfo.runnerBinaryPath;
 
+        // Command evaluated internally by Steam:
         const fullProcessCommand = `"${runnerPath}" run "${exeInfo.fullExePath}"`;
         const renderedFullBash = commandString.replace('%command%', fullProcessCommand);
 
+        // Terminal command to launch via running Steam Client (Best for EAC, online games like SMITE 2)
+        const steamClientCmd = `steam steam://run/${selectedGame.appId}`;
+
+        // Universal standalone command for terminal test (Fish, Bash, Zsh compatible)
+        const standaloneTerminalCmd = `env SteamAppId="${selectedGame.appId}" SteamGameId="${selectedGame.appId}" STEAM_COMPAT_CLIENT_INSTALL_PATH="$HOME/.local/share/Steam" STEAM_COMPAT_DATA_PATH="$HOME/.local/share/Steam/steamapps/compatdata/${selectedGame.appId}" STEAM_COMPAT_APP_ID="${selectedGame.appId}" ${includeProtonLog ? 'PROTON_LOG=1 ' : ''}bash -c 'cd "${exeInfo.defaultInstallPath}" && ${commandString.replace('%command%', `"${runnerPath}" run "./${exeInfo.executableName}"`)}'`;
+
+        const copyText = (text: string, type: 'standalone' | 'evaluated' | 'steamrun') => {
+          navigator.clipboard.writeText(text);
+          if (type === 'standalone') {
+            setCopiedStandalone(true);
+            setTimeout(() => setCopiedStandalone(false), 2000);
+          } else if (type === 'steamrun') {
+            setCopiedSteamRun(true);
+            setTimeout(() => setCopiedSteamRun(false), 2000);
+          } else {
+            setCopiedEvaluated(true);
+            setTimeout(() => setCopiedEvaluated(false), 2000);
+          }
+        };
+
+        const isKnownEACorOnline = selectedGame.appId === 2437170 || 
+          selectedGame.name.toLowerCase().includes('smite') || 
+          selectedGame.name.toLowerCase().includes('apex') || 
+          selectedGame.name.toLowerCase().includes('helldivers') ||
+          selectedGame.name.toLowerCase().includes('destiny') ||
+          selectedGame.name.toLowerCase().includes('rust');
+
         return (
-          <div className="bg-slate-950/95 border border-cyan-500/30 rounded-xl p-3.5 space-y-2.5 mt-2 shadow-inner">
-            <div className="flex items-center justify-between">
+          <div className="bg-slate-950/95 border border-cyan-500/30 rounded-xl p-3.5 space-y-3 mt-2 shadow-inner">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center space-x-2 text-cyan-400 text-xs font-semibold">
                 <Play className="w-3.5 h-3.5 text-emerald-400" />
                 <span>Resolved Steam Process & Executable Pipeline:</span>
               </div>
-              <span className="text-[10px] bg-cyan-950/80 text-cyan-300 px-2 py-0.5 rounded border border-cyan-800/80 font-mono">
-                {exeInfo.executableName}
-              </span>
+              <div className="flex items-center space-x-1.5 flex-wrap gap-1">
+                <span className="text-[10px] bg-slate-900 text-cyan-300 px-2 py-0.5 rounded border border-cyan-800/80 font-mono">
+                  {runnerInfo.isCustom ? 'compatibilitytools.d' : 'steamapps/common'}
+                </span>
+                <span className="text-[10px] bg-cyan-950/80 text-cyan-300 px-2 py-0.5 rounded border border-cyan-800/80 font-mono">
+                  {exeInfo.executableName}
+                </span>
+                <span className="text-[10px] bg-emerald-950/80 text-emerald-400 px-2 py-0.5 rounded border border-emerald-800/80 font-mono">
+                  AppID: {selectedGame.appId}
+                </span>
+              </div>
             </div>
 
             {/* Path breakdown details */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono bg-slate-900/60 p-2 rounded-lg border border-slate-800/80">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] font-mono bg-slate-900/60 p-2.5 rounded-lg border border-slate-800/80">
+              <div>
+                <span className="text-slate-500 block text-[10px] uppercase tracking-wider">Runner Folder</span>
+                <span className="text-cyan-300 font-semibold truncate block" title={runnerInfo.folderName}>
+                  {runnerInfo.folderName}
+                </span>
+              </div>
               <div>
                 <span className="text-slate-500 block text-[10px] uppercase tracking-wider">Install Directory</span>
                 <span className="text-slate-300 font-semibold truncate block" title={exeInfo.installDirName}>
@@ -850,16 +895,149 @@ export const LiveCommandPreview: React.FC<LiveCommandPreviewProps> = ({
                 </span>
               </div>
               <div>
-                <span className="text-slate-500 block text-[10px] uppercase tracking-wider">Game Executable Path</span>
+                <span className="text-slate-500 block text-[10px] uppercase tracking-wider">Game Executable</span>
                 <span className="text-emerald-400 font-semibold truncate block" title={exeInfo.relativeExePath}>
                   {exeInfo.relativeExePath}
                 </span>
               </div>
             </div>
 
-            <div className="bg-slate-900/90 p-2.5 rounded-lg font-mono text-[11px] text-slate-300 border border-slate-800 break-all leading-relaxed">
-              <span className="text-slate-500"># Native Linux Bash command evaluated by Steam runtime at launch:</span><br />
-              <span className="text-amber-300">{renderedFullBash}</span>
+            {/* Recommended: Steam Client Launch from Terminal */}
+            <div className="bg-emerald-950/20 border border-emerald-500/40 rounded-lg p-3 space-y-2">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center space-x-1.5 text-emerald-400 font-semibold text-xs">
+                  <Rocket className="w-3.5 h-3.5" />
+                  <span>Recommended: Launch via Steam Client from Terminal</span>
+                  <span className="text-[9px] bg-emerald-900/80 text-emerald-200 border border-emerald-700/80 px-1.5 py-0.2 rounded font-sans uppercase font-bold tracking-wider">
+                    Required for EAC & Online Games
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => copyText(steamClientCmd, 'steamrun')}
+                  className="inline-flex items-center space-x-1 text-[10px] bg-emerald-900/60 hover:bg-emerald-800/80 text-emerald-200 border border-emerald-700/80 px-2 py-0.5 rounded transition"
+                  title="Copy Steam client terminal command"
+                >
+                  {copiedSteamRun ? (
+                    <>
+                      <Check className="w-3 h-3 text-emerald-400" />
+                      <span>Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3 h-3 text-emerald-400" />
+                      <span>Copy Steam Launch Command</span>
+                    </>
+                  )}
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-300 font-sans leading-relaxed">
+                Tells the running Steam client to start the game with your saved launch options. This automatically mounts the <strong className="text-emerald-300">Proton EasyAntiCheat Runtime</strong>, initializes the <strong className="text-emerald-300">Steamworks IPC socket</strong>, and configures the container so games like <span className="text-amber-300 font-semibold">SMITE 2</span> do not hang at launch.
+              </p>
+              <div className="p-2 bg-slate-950/90 rounded border border-emerald-900/60 font-mono text-[11px] text-emerald-300 select-all">
+                {steamClientCmd}
+              </div>
+            </div>
+
+            {/* Standalone Terminal Test Command (with STEAM_COMPAT_DATA_PATH, SteamAppId, and ProtonLog) */}
+            <div className="bg-slate-900/90 p-3 rounded-lg font-mono text-[11px] text-slate-300 border border-slate-800 space-y-2 shadow-sm">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center space-x-1.5 text-cyan-400 font-semibold text-xs">
+                  <Terminal className="w-3.5 h-3.5" />
+                  <span>Direct Proton Binary Terminal Test (Offline / Non-EAC Testing):</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <label className="flex items-center space-x-1 text-[10px] text-slate-400 hover:text-slate-200 cursor-pointer select-none font-sans">
+                    <input
+                      type="checkbox"
+                      checked={includeProtonLog}
+                      onChange={(e) => setIncludeProtonLog(e.target.checked)}
+                      className="rounded border-slate-700 bg-slate-800 text-cyan-500 focus:ring-0 focus:ring-offset-0 w-3 h-3"
+                    />
+                    <span>PROTON_LOG=1</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => copyText(standaloneTerminalCmd, 'standalone')}
+                    className="inline-flex items-center space-x-1 text-[10px] bg-cyan-950/60 hover:bg-cyan-900/60 text-cyan-300 border border-cyan-700/60 px-2 py-0.5 rounded transition"
+                    title="Copy direct proton terminal command"
+                  >
+                    {copiedStandalone ? (
+                      <>
+                        <Check className="w-3 h-3 text-cyan-400" />
+                        <span>Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3 text-cyan-400" />
+                        <span>Copy Command</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-400 font-sans">
+                Exports <code className="text-cyan-300 font-mono">SteamAppId</code> & <code className="text-cyan-300 font-mono">SteamGameId</code> (prevents <em>"Skipping fix execution. We are probably running a unit test"</em>) and sets <code className="text-cyan-300 font-mono">STEAM_COMPAT_DATA_PATH</code>.
+              </p>
+              <div className="p-2 bg-slate-950/80 rounded border border-slate-800 break-all leading-relaxed text-cyan-300 select-all font-mono text-[10.5px]">
+                {standaloneTerminalCmd}
+              </div>
+            </div>
+
+            {/* Steam internal runtime launch command */}
+            <div className="bg-slate-900/90 p-3 rounded-lg font-mono text-[11px] text-slate-300 border border-slate-800 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-1.5 text-slate-400 font-semibold text-xs">
+                  <Play className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Steam Internal Evaluation Pipeline (%command% expansion):</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => copyText(renderedFullBash, 'evaluated')}
+                  className="inline-flex items-center space-x-1 text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-2 py-0.5 rounded transition"
+                  title="Copy evaluated launch command"
+                >
+                  {copiedEvaluated ? (
+                    <>
+                      <Check className="w-3 h-3 text-cyan-400" />
+                      <span>Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3 h-3 text-slate-400" />
+                      <span>Copy Pipeline</span>
+                    </>
+                  )}
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-500 font-sans">
+                How Steam evaluates your launch options at runtime (Steam automatically supplies environment variables and working directory).
+              </p>
+              <div className="p-2 bg-slate-950/80 rounded border border-slate-800 break-all leading-relaxed text-amber-300 select-all">
+                {renderedFullBash}
+              </div>
+            </div>
+
+            {/* Diagnostic explanation tips */}
+            <div className="bg-cyan-950/20 border border-cyan-800/40 rounded-lg p-3 text-[11px] text-cyan-300/90 space-y-2">
+              <div className="flex items-center space-x-1.5 font-semibold text-cyan-300">
+                <Info className="w-3.5 h-3.5 flex-shrink-0 text-cyan-400" />
+                <span>Why did SMITE 2 stall after "ntsync: up and running."?</span>
+              </div>
+              <ul className="list-disc list-inside space-y-1 text-[10.5px] text-slate-300 pl-1">
+                <li>
+                  <strong className="text-emerald-300">ntsync is working properly:</strong> The log <code className="text-emerald-300 font-mono">ntsync: up and running.</code> confirms your Linux 6.14+ CachyOS kernel NTSYNC driver initialized successfully.
+                </li>
+                <li>
+                  <strong className="text-amber-300">Easy Anti-Cheat (EAC) & Steamworks:</strong> SMITE 2 (<code className="text-cyan-300 font-mono">Hemingway.exe</code>) uses Easy Anti-Cheat (EOS). When invoked from a standalone terminal outside Steam, EAC cannot connect to the Steam Client IPC socket or the Proton EAC runtime bridge. EAC hangs waiting for Steam authentication instead of loading the game window.
+                </li>
+                <li>
+                  <strong className="text-cyan-200">"We are probably running a unit test" Warning:</strong> ProtonFixes checks <code className="text-cyan-300 font-mono">SteamAppId</code> to identify the game. When run without <code className="text-cyan-300 font-mono">SteamAppId</code>, ProtonFixes skips game fixes. We have added <code className="text-emerald-300 font-mono">SteamAppId</code> and <code className="text-emerald-300 font-mono">SteamGameId</code> to the standalone command.
+                </li>
+                <li>
+                  <strong className="text-emerald-300">Solution:</strong> Save your launch options to Steam VDF using the button above, then launch via <code className="text-emerald-300 font-mono">steam steam://run/{selectedGame.appId}</code> or the Steam Library. Steam will provide the EAC container and start the game immediately.
+                </li>
+              </ul>
             </div>
           </div>
         );

@@ -578,7 +578,7 @@ int main(int argc, char *argv[]) {
     // 7b. Test Runtime Process Pipeline Simulator
     if (opt_test_runtime || opt_test_exec) {
         RuntimeSimulationResult sim;
-        run_runtime_simulation(g_target_appid, g_target_gamename, final_cmd, &sim);
+        run_runtime_simulation_ex(g_target_appid, g_target_gamename, final_cmd, strlen(opt_set_proton_target) > 0 ? opt_set_proton_target : NULL, &sim);
         print_runtime_simulation_report(&sim);
 
         if (opt_test_exec) {
@@ -1561,10 +1561,14 @@ int scan_installed_proton_versions(ProtonVersionInfo *out_versions, int max_vers
                 fclose(fp);
             }
 
-            if (strlen(id) == 0) snprintf(id, sizeof(id), "%.63s", entry->d_name);
-            if (strlen(display) == 0) snprintf(display, sizeof(display), "%.127s", id);
-
-            add_proton_version(out_versions, &count, max_versions, id, display, tool_dir, true, is_stl);
+            // For custom compatibility tools on disk, entry->d_name is the actual folder name on the filesystem
+            // Preserve entry->d_name as the primary identifier to prevent path mismatches
+            char primary_id[64];
+            snprintf(primary_id, sizeof(primary_id), "%.63s", entry->d_name);
+            if (strlen(display) == 0) {
+                snprintf(display, sizeof(display), "%.127s", strlen(id) > 0 ? id : entry->d_name);
+            }
+            add_proton_version(out_versions, &count, max_versions, primary_id, display, tool_dir, true, is_stl);
         }
         closedir(dir);
     }
@@ -1925,11 +1929,6 @@ int run_interactive_tui(ProtonFlag *flags, int num_flags, int app_id, const char
 #include <unistd.h>
 #include <sys/ioctl.h>
 
-static const SteamGameInfo default_catalog_games[] = {
-${initialGameArray}
-};
-#define NUM_DEFAULT_CATALOG ((int)(sizeof(default_catalog_games) / sizeof(default_catalog_games[0])))
-
 static struct termios orig_termios;
 
 static void disable_raw_mode(void) {
@@ -1993,8 +1992,10 @@ int run_interactive_tui(ProtonFlag *flags, int num_flags, int app_id, const char
         if (vdf_get_compat_tool(config_vdf_path, current_appid, found_compat, sizeof(found_compat))) {
             snprintf(current_proton_id, sizeof(current_proton_id), "%s", found_compat);
             for (int i = 0; i < num_proton_runners; i++) {
-                if (strcmp(proton_runners[i].id, current_proton_id) == 0) {
+                if (strcmp(proton_runners[i].id, current_proton_id) == 0 ||
+                    strcmp(proton_runners[i].display_name, current_proton_id) == 0) {
                     current_proton_idx = i;
+                    snprintf(current_proton_id, sizeof(current_proton_id), "%.63s", proton_runners[i].id);
                     break;
                 }
             }
@@ -2011,18 +2012,13 @@ int run_interactive_tui(ProtonFlag *flags, int num_flags, int app_id, const char
     static const int num_stl_modes = sizeof(stl_modes) / sizeof(stl_modes[0]);
     int current_stl_mode_idx = 0;
 
-    // Initialize unified games list (Active Game + Scanned Steam Libraries + Built-in Catalog Games)
+    // Initialize games list exclusively from installed games scanned in Steam library folders
     SteamGameInfo all_games[128];
     int total_games = 0;
 
-    // 1. Target game as initial entry
-    all_games[0].app_id = app_id;
-    snprintf(all_games[0].name, sizeof(all_games[0].name), "%s", game_name);
-    total_games = 1;
-
-    // 2. Discover installed games from Steam library folders
-    SteamGameInfo scanned[64];
-    int scanned_count = scan_all_steam_libraries(scanned, 64);
+    // 1. Scan installed games from local Steam library folders
+    SteamGameInfo scanned[128];
+    int scanned_count = scan_all_steam_libraries(scanned, 128);
     for (int i = 0; i < scanned_count && total_games < 128; i++) {
         bool exists = false;
         for (int j = 0; j < total_games; j++) {
@@ -2033,14 +2029,23 @@ int run_interactive_tui(ProtonFlag *flags, int num_flags, int app_id, const char
         }
     }
 
-    // 3. Fallback to pre-configured catalog games to guarantee games can always be cycled
-    for (int i = 0; i < NUM_DEFAULT_CATALOG && total_games < 128; i++) {
-        bool exists = false;
-        for (int j = 0; j < total_games; j++) {
-            if (all_games[j].app_id == default_catalog_games[i].app_id) { exists = true; break; }
+    // 2. Ensure the user-specified target game is present in the list
+    if (app_id > 0) {
+        bool target_present = false;
+        for (int i = 0; i < total_games; i++) {
+            if (all_games[i].app_id == app_id) {
+                target_present = true;
+                // If scanned name is available and game_name is generic, preserve scanned title
+                if (strlen(all_games[i].name) > 0 && strstr(game_name, "Steam App")) {
+                    snprintf(current_game, sizeof(current_game), "%s", all_games[i].name);
+                }
+                break;
+            }
         }
-        if (!exists) {
-            all_games[total_games++] = default_catalog_games[i];
+        if (!target_present && total_games < 128) {
+            all_games[total_games].app_id = app_id;
+            snprintf(all_games[total_games].name, sizeof(all_games[total_games].name), "%s", game_name);
+            total_games++;
         }
     }
 
@@ -2224,7 +2229,7 @@ int run_interactive_tui(ProtonFlag *flags, int num_flags, int app_id, const char
                 } else {
                     current_proton_idx = (current_proton_idx + 1) % num_proton_runners;
                 }
-                snprintf(current_proton_id, sizeof(current_proton_id), "%s", proton_runners[current_proton_idx].id);
+                snprintf(current_proton_id, sizeof(current_proton_id), "%.63s", proton_runners[current_proton_idx].id);
                 if (has_config_vdf) {
                     vdf_set_compat_tool(config_vdf_path, current_appid, current_proton_id);
                     snprintf(status_msg, sizeof(status_msg), "🍷 Switched runner to '%s' (%s) & saved to config.vdf",
@@ -2268,7 +2273,7 @@ int run_interactive_tui(ProtonFlag *flags, int num_flags, int app_id, const char
             build_tui_command(flags, num_flags, current_launch_opts, sizeof(current_launch_opts));
 
             RuntimeSimulationResult sim;
-            run_runtime_simulation(current_appid, current_game, current_launch_opts, &sim);
+            run_runtime_simulation_ex(current_appid, current_game, current_launch_opts, current_proton_id, &sim);
             print_runtime_simulation_report(&sim);
 
             printf("\\n \\033[1;36mPress any key to return to Manager...\\033[0m");
@@ -2321,7 +2326,7 @@ int run_interactive_tui(ProtonFlag *flags, int num_flags, int app_id, const char
                 snprintf(status_msg, sizeof(status_msg), "🎮 Switched Target Game [%d/%d]: '%s' (AppID %d)",
                          current_game_idx + 1, total_games, current_game, current_appid);
             } else {
-                snprintf(status_msg, sizeof(status_msg), "ℹ️ Only 1 game available in library/catalog (AppID %d)", current_appid);
+                snprintf(status_msg, sizeof(status_msg), "ℹ️ Only 1 game available in library (AppID %d)", current_appid);
             }
         } else if (c == 'S') {
             char vdf_path[1024];
@@ -2399,6 +2404,9 @@ bool resolve_game_executable(int app_id, const char *game_name, GameExecutableIn
 // Resolves configured proton runner binary path
 bool resolve_proton_binary(int app_id, const char *tool_id, char *out_path, size_t max_len, char *out_display, size_t max_disp_len);
 
+// Runs full runtime simulation pipeline with optional specific proton runner override
+void run_runtime_simulation_ex(int app_id, const char *game_name, const char *launch_options, const char *tool_override, RuntimeSimulationResult *res);
+
 // Runs full runtime simulation pipeline based on currently configured flags, game and proton runner
 void run_runtime_simulation(int app_id, const char *game_name, const char *launch_options, RuntimeSimulationResult *res);
 
@@ -2434,6 +2442,7 @@ int execute_runtime_dry_run(const RuntimeSimulationResult *res);
 #include <pwd.h>
 #include <sys/stat.h>
 #include <ctype.h>
+#include <dirent.h>
 
 typedef struct {
     int app_id;
@@ -2470,7 +2479,8 @@ static const KnownGameEntry KNOWN_GAMES[] = {
     { 2215430, "Ghost of Tsushima DIRECTOR'S CUT", "GhostOfTsushima.exe", "GhostOfTsushima.exe", false },
     { 2420110, "Horizon Forbidden West Complete Edition", "HorizonForbiddenWest.exe", "HorizonForbiddenWest.exe", false },
     { 1551360, "ForzaHorizon5", "ForzaHorizon5.exe", "ForzaHorizon5.exe", false },
-    { 782330,  "DOOMEternal", "DOOMEternalx64vk.exe", "DOOMEternalx64vk.exe", false }
+    { 782330,  "DOOMEternal", "DOOMEternalx64vk.exe", "DOOMEternalx64vk.exe", false },
+    { 1659820, "POSTAL Brain Damaged", "POSTAL Brain Damaged.exe", "POSTAL Brain Damaged.exe", false }
 };
 static const int NUM_KNOWN_GAMES = (int)(sizeof(KNOWN_GAMES) / sizeof(KNOWN_GAMES[0]));
 
@@ -2508,7 +2518,8 @@ bool resolve_game_executable(int app_id, const char *game_name, GameExecutableIn
 
     const KnownGameEntry *matched = NULL;
     for (int i = 0; i < NUM_KNOWN_GAMES; i++) {
-        if (KNOWN_GAMES[i].app_id == app_id) {
+        if (KNOWN_GAMES[i].app_id == app_id ||
+            (game_name && strcasestr(game_name, KNOWN_GAMES[i].install_dir))) {
             matched = &KNOWN_GAMES[i];
             break;
         }
@@ -2589,6 +2600,26 @@ bool resolve_game_executable(int app_id, const char *game_name, GameExecutableIn
     return true;
 }
 
+static bool is_valve_official_runner(const char *name) {
+    if (!name || strlen(name) == 0) return false;
+    if (strcasestr(name, "cachyos") || strcasestr(name, "ge-") || strcasestr(name, "-ge") ||
+        (strcasestr(name, "ge") && (strcasestr(name, "proton") || strcasestr(name, "custom"))) ||
+        strcasestr(name, "tkg") || strcasestr(name, "wineland") || strcasestr(name, "steamtinkerlaunch") ||
+        strcasestr(name, "stl") || strcasestr(name, "custom") || strcasestr(name, "rtsp") ||
+        strcasestr(name, "slr-") || strcasestr(name, "x86_64") || strcasestr(name, "kron4ek")) {
+        return false;
+    }
+    if (strcasestr(name, "Proton Experimental") || strcasestr(name, "Proton Hotfix") ||
+        strcasestr(name, "Proton Next") || strcasestr(name, "Proton Bleeding") ||
+        strcasestr(name, "Steam Linux Runtime")) {
+        return true;
+    }
+    if (strncasecmp(name, "Proton ", 7) == 0 && isdigit((unsigned char)name[7])) {
+        return true;
+    }
+    return false;
+}
+
 bool resolve_proton_binary(int app_id, const char *tool_id, char *out_path, size_t max_len, char *out_display, size_t max_disp_len) {
     if (!out_path || max_len == 0) return false;
     out_path[0] = '\\0';
@@ -2612,39 +2643,134 @@ bool resolve_proton_binary(int app_id, const char *tool_id, char *out_path, size
         snprintf(out_display, max_disp_len, "%s", target_tool);
     }
 
-    char candidate[1024];
-    const char *search_templates[] = {
-        "~/.steam/root/compatibilitytools.d/%s/proton",
-        "~/.local/share/Steam/compatibilitytools.d/%s/proton",
-        "~/.local/share/Steam/steamapps/common/%s/proton",
-        "~/.var/app/com.valvesoftware.Steam/.local/share/Steam/compatibilitytools.d/%s/proton",
-        "~/.local/share/Steam/steamapps/common/Proton Experimental/proton",
-        "~/.local/share/Steam/steamapps/common/Proton 9.0 (Beta)/proton",
-        "~/.local/share/Steam/steamapps/common/Proton 8.0/proton"
-    };
-    int num_search = (int)(sizeof(search_templates) / sizeof(search_templates[0]));
+    // Build target with spaces converted to hyphens (standard for custom runners e.g. proton-cachyos-11.0...)
+    char target_dashed[128];
+    snprintf(target_dashed, sizeof(target_dashed), "%s", target_tool);
+    for (char *p = target_dashed; *p; p++) {
+        if (*p == ' ') *p = '-';
+    }
 
-    for (int i = 0; i < num_search; i++) {
-        char raw[1024];
-        if (i < 4) {
-            snprintf(raw, sizeof(raw), search_templates[i], target_tool);
-        } else {
-            snprintf(raw, sizeof(raw), "%s", search_templates[i]);
-        }
-        expand_user_path(raw, candidate, sizeof(candidate));
-        if (access(candidate, F_OK) == 0) {
-            snprintf(out_path, max_len, "%s", candidate);
-            return true;
+    // 1. Check scanned installed proton runners
+    ProtonVersionInfo pversions[64];
+    int num_installed = scan_installed_proton_versions(pversions, 64);
+    for (int i = 0; i < num_installed; i++) {
+        if (strcasecmp(pversions[i].id, target_tool) == 0 ||
+            strcasecmp(pversions[i].display_name, target_tool) == 0 ||
+            strcasecmp(pversions[i].id, target_dashed) == 0) {
+            char check_bin[2048];
+            snprintf(check_bin, sizeof(check_bin), "%s/%s",
+                     pversions[i].install_path,
+                     pversions[i].is_stl ? "steamtinkerlaunch" : "proton");
+            if (access(check_bin, F_OK) == 0) {
+                snprintf(out_path, max_len, "%s", check_bin);
+                if (out_display && max_disp_len > 0) {
+                    snprintf(out_display, max_disp_len, "%s", pversions[i].id);
+                }
+                return true;
+            }
         }
     }
 
+    bool is_valve = is_valve_official_runner(target_tool);
+
+    // 2. Direct directory probing
+    const char *compat_dirs[] = {
+        "~/.local/share/Steam/compatibilitytools.d",
+        "~/.steam/root/compatibilitytools.d",
+        "~/.steam/steam/compatibilitytools.d",
+        "~/.var/app/com.valvesoftware.Steam/.local/share/Steam/compatibilitytools.d",
+        "/usr/share/steam/compatibilitytools.d"
+    };
+    int num_compat_dirs = (int)(sizeof(compat_dirs) / sizeof(compat_dirs[0]));
+
+    if (!is_valve) {
+        for (int i = 0; i < num_compat_dirs; i++) {
+            char exp_dir[1024];
+            expand_user_path(compat_dirs[i], exp_dir, sizeof(exp_dir));
+
+            // Try target_tool
+            char cand[2048];
+            snprintf(cand, sizeof(cand), "%s/%s/proton", exp_dir, target_tool);
+            if (access(cand, F_OK) == 0) {
+                snprintf(out_path, max_len, "%s", cand);
+                return true;
+            }
+
+            // Try target_dashed
+            snprintf(cand, sizeof(cand), "%s/%s/proton", exp_dir, target_dashed);
+            if (access(cand, F_OK) == 0) {
+                snprintf(out_path, max_len, "%s", cand);
+                return true;
+            }
+
+            // Scan directory entries
+            DIR *d = opendir(exp_dir);
+            if (d) {
+                struct dirent *ent;
+                while ((ent = readdir(d)) != NULL) {
+                    if (ent->d_name[0] == '.') continue;
+                    bool matched = false;
+                    if (strcasecmp(ent->d_name, target_tool) == 0 ||
+                        strcasecmp(ent->d_name, target_dashed) == 0) {
+                        matched = true;
+                    } else if ((strcasestr(target_tool, "cachyos") && strcasestr(ent->d_name, "cachyos")) ||
+                               (strcasestr(target_tool, "kron4ek") && strcasestr(ent->d_name, "kron4ek"))) {
+                        matched = true;
+                    }
+                    if (matched) {
+                        snprintf(cand, sizeof(cand), "%s/%s/proton", exp_dir, ent->d_name);
+                        if (access(cand, F_OK) == 0) {
+                            snprintf(out_path, max_len, "%s", cand);
+                            if (out_display && max_disp_len > 0) {
+                                snprintf(out_display, max_disp_len, "%s", ent->d_name);
+                            }
+                            closedir(d);
+                            return true;
+                        }
+                    }
+                }
+                closedir(d);
+            }
+        }
+    } else {
+        const char *valve_dirs[] = {
+            "~/.local/share/Steam/steamapps/common",
+            "~/.steam/root/steamapps/common",
+            "~/.steam/steam/steamapps/common",
+            "~/.var/app/com.valvesoftware.Steam/.local/share/Steam/steamapps/common"
+        };
+        int num_valve_dirs = (int)(sizeof(valve_dirs) / sizeof(valve_dirs[0]));
+        for (int i = 0; i < num_valve_dirs; i++) {
+            char exp_dir[1024];
+            expand_user_path(valve_dirs[i], exp_dir, sizeof(exp_dir));
+            char cand[2048];
+            snprintf(cand, sizeof(cand), "%s/%s/proton", exp_dir, target_tool);
+            if (access(cand, F_OK) == 0) {
+                snprintf(out_path, max_len, "%s", cand);
+                return true;
+            }
+        }
+    }
+
+    // 3. Fallback for simulation / dry-run when runner is not yet on disk:
     char fallback_raw[1024];
-    snprintf(fallback_raw, sizeof(fallback_raw), "~/.local/share/Steam/steamapps/common/%s/proton", target_tool);
+    if (!is_valve) {
+        // Custom runner: strictly compatibilitytools.d with dashed name, NEVER spaces!
+        snprintf(fallback_raw, sizeof(fallback_raw),
+                 "~/.local/share/Steam/compatibilitytools.d/%s/proton", target_dashed);
+        if (out_display && max_disp_len > 0) {
+            snprintf(out_display, max_disp_len, "%s", target_dashed);
+        }
+    } else {
+        // Official Valve runner: in steamapps/common
+        snprintf(fallback_raw, sizeof(fallback_raw),
+                 "~/.local/share/Steam/steamapps/common/%s/proton", target_tool);
+    }
     expand_user_path(fallback_raw, out_path, max_len);
     return false;
 }
 
-void run_runtime_simulation(int app_id, const char *game_name, const char *launch_options, RuntimeSimulationResult *res) {
+void run_runtime_simulation_ex(int app_id, const char *game_name, const char *launch_options, const char *tool_override, RuntimeSimulationResult *res) {
     if (!res) return;
     memset(res, 0, sizeof(*res));
 
@@ -2653,7 +2779,7 @@ void run_runtime_simulation(int app_id, const char *game_name, const char *launc
 
     resolve_game_executable(app_id, game_name, &res->exe_info);
 
-    res->proton_exists = resolve_proton_binary(app_id, NULL, res->proton_binary_path, sizeof(res->proton_binary_path),
+    res->proton_exists = resolve_proton_binary(app_id, tool_override, res->proton_binary_path, sizeof(res->proton_binary_path),
                                                res->proton_display_name, sizeof(res->proton_display_name));
     res->proton_executable = check_file_executable(res->proton_binary_path);
 
@@ -2787,6 +2913,10 @@ void run_runtime_simulation(int app_id, const char *game_name, const char *launc
     }
 }
 
+void run_runtime_simulation(int app_id, const char *game_name, const char *launch_options, RuntimeSimulationResult *res) {
+    run_runtime_simulation_ex(app_id, game_name, launch_options, NULL, res);
+}
+
 void print_runtime_simulation_report(const RuntimeSimulationResult *res) {
     if (!res) return;
 
@@ -2819,6 +2949,15 @@ void print_runtime_simulation_report(const RuntimeSimulationResult *res) {
     printf("\\033[1;36m--------------------------------------------------------------------------------\\033[0m\\n");
     printf(" \\033[1;32m🚀 Evaluated Linux Bash Command (evaluated by Steam Runtime at launch):\\033[0m\\n\\n");
     printf("   \\033[1;33m%s\\033[0m\\n\\n", res->evaluated_bash);
+
+    if (!res->exe_info.is_native_linux) {
+        printf(" \\033[1;32m🚀 Recommended Steam Client Launch (Required for EAC / Online Games):\\033[0m\\n\\n");
+        printf("   \\033[1;32msteam steam://run/%d\\033[0m  (or: steam -applaunch %d)\\n\\n", res->app_id, res->app_id);
+
+        printf(" \\033[1;36m💻 Standalone Terminal Test Command (Offline / Direct Proton Debug):\\033[0m\\n\\n");
+        printf("   \\033[1;36menv SteamAppId=\\\"%d\\\" SteamGameId=\\\"%d\\\" STEAM_COMPAT_CLIENT_INSTALL_PATH=\\\"$HOME/.local/share/Steam\\\" STEAM_COMPAT_DATA_PATH=\\\"$HOME/.local/share/Steam/steamapps/compatdata/%d\\\" STEAM_COMPAT_APP_ID=\\\"%d\\\" bash -c 'cd \\\"%.500s\\\" && %s'\\033[0m\\n\\n",
+               res->app_id, res->app_id, res->app_id, res->app_id, res->exe_info.install_dir, res->evaluated_bash);
+    }
 
     printf("\\033[1;36m--------------------------------------------------------------------------------\\033[0m\\n");
     printf(" \\033[1;37m📋 Runtime Pipeline Health & Sanity Diagnostics:\\033[0m\\n");
