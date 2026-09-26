@@ -33,6 +33,14 @@ const DEFAULT_PROTON_PRESETS = [
   'GE-Proton9-25',
   'GE-Proton9-20',
   'GE-Proton8-32',
+  'Proton-Wineland-11.0',
+  'Proton-CachyOS-Wineland',
+  'Proton-CachyOS',
+  'Kron4ek-Proton-11.0',
+  'Proton-11.0-2-amd64',
+  'Proton-10.0-3-amd64',
+  'Steam-Tinker-Launch',
+  'SteamTinkerLaunch (STL)',
   'Proton-RTSP',
   'Proton-RTSP-9.0',
 ];
@@ -69,14 +77,16 @@ export const ProtonVersionSelector: React.FC<ProtonVersionSelectorProps> = ({
   }, []);
 
   // Check if current value matches an installed or preset version
-  const installedTitles = installedRunners.map((r) => r.displayTitle);
-  const allKnownOptions = Array.from(
-    new Set([...installedTitles, ...DEFAULT_PROTON_PRESETS])
+  const installedTitles = installedRunners.flatMap((r) => [r.folderName, r.displayTitle].filter(Boolean));
+  const matchedInstalled = installedRunners.find(
+    (r) =>
+      r.folderName.toLowerCase() === (value || '').toLowerCase() ||
+      r.displayTitle.toLowerCase() === (value || '').toLowerCase()
   );
-
-  const matchedOption = allKnownOptions.find(
+  const matchedPreset = DEFAULT_PROTON_PRESETS.find(
     (opt) => opt.toLowerCase() === (value || '').toLowerCase()
   );
+  const matchedOption = matchedInstalled ? (matchedInstalled.folderName || matchedInstalled.displayTitle) : matchedPreset;
   const selectDisplayValue = matchedOption || value || 'Proton Experimental';
   const isCurrentValueInOptions = Boolean(matchedOption);
 
@@ -151,11 +161,17 @@ export const ProtonVersionSelector: React.FC<ProtonVersionSelectorProps> = ({
               {/* Installed Proton Versions Group */}
               {installedRunners.length > 0 && (
                 <optgroup label="⚡ Installed on System (Detected)">
-                  {installedRunners.map((runner) => (
-                    <option key={`inst_${runner.displayTitle}`} value={runner.displayTitle}>
-                      ✓ {runner.displayTitle} {runner.source ? `(${runner.source})` : '(Installed)'}
-                    </option>
-                  ))}
+                  {installedRunners.map((runner) => {
+                    const runnerVal = runner.folderName || runner.displayTitle;
+                    const displayLabel = runner.displayTitle && runner.displayTitle !== runner.folderName
+                      ? `${runner.folderName} (${runner.displayTitle})`
+                      : runner.folderName;
+                    return (
+                      <option key={`inst_${runnerVal}`} value={runnerVal}>
+                        ✓ {displayLabel} {runner.source ? `[${runner.source}]` : '(Installed)'}
+                      </option>
+                    );
+                  })}
                 </optgroup>
               )}
 

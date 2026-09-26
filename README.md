@@ -5,8 +5,21 @@
 [![React](https://img.shields.io/badge/React-19-cyan)](https://react.dev/)
 [![Express](https://img.shields.io/badge/Express-4.21-lightgrey)](https://expressjs.com/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-v4-38bdf8)](https://tailwindcss.com/)
+[![EU AI Act: AI-Generated](https://img.shields.io/badge/EU%20AI%20Act-AI%20Generated-1d1d1b?logoColor=white)](https://digital-strategy.ec.europa.eu/en/policies/eu-icons-labelling-ai-generated-content)
 
 A modern Linux gaming utility designed for Linux gamers, Steam Deck users, and power users. Easily customize, test, and apply Steam Proton launch options and manage custom Proton runners without memorizing complex command-line syntax.
+
+---
+
+> [!NOTE]
+> ### 🇪🇺 EU AI Act Disclosure: AI-Generated Content
+> <p align="left">
+>   <a href="https://digital-strategy.ec.europa.eu/en/policies/eu-icons-labelling-ai-generated-content" target="_blank" rel="noopener noreferrer">
+>     <img src="./public/icons/eu-ai/eu-ai-generated-black.svg" alt="EU AI Act - AI Generated Content" height="32" />
+>   </a>
+> </p>
+>
+> Text, documentation, summaries, and code templates in this repository have been generated or refined with the assistance of Artificial Intelligence in accordance with **Article 50(4) of Regulation (EU) 2024/1689 (European Union Artificial Intelligence Act)** and the European Commission's [Code of Practice on marking and labelling AI-generated content](https://digital-strategy.ec.europa.eu/en/policies/eu-icons-labelling-ai-generated-content).
 
 ---
 
@@ -329,15 +342,26 @@ npm start       # Starts standalone Node.js production server
 ## ❓ Troubleshooting & FAQs
 
 <details>
-<summary><b>npm install warnings / blocked scripts (esbuild)</b></summary>
+<summary><b>npm install warnings / blocked scripts (allowScripts)</b></summary>
 
-Modern `npm` (v10+) may block lifecycle scripts by default:
+Modern `npm` (v11+ and v12+) blocks package lifecycle scripts by default unless allowed via `allowScripts`:
 ```text
-npm warn install-scripts esbuild (postinstall: node install.js)
+npm warn install-scripts 4 packages had install scripts blocked because they are not covered by allowScripts:
+npm warn install-scripts   @google/genai (preinstall: echo 'preinstall: no-op')
+npm warn install-scripts   esbuild (postinstall: node install.js)
+npm warn install-scripts   protobufjs (postinstall: node scripts/postinstall)
 ```
-If `esbuild` binary issues occur during build, run:
+This project pre-approves trusted build scripts directly in `package.json` and `.npmrc`:
+```json
+"allowScripts": {
+  "@google/genai": true,
+  "esbuild": true,
+  "protobufjs": true
+}
+```
+If you still see this warning on a custom environment or older clone, you can approve them with:
 ```bash
-npm rebuild esbuild
+npm install-scripts approve @google/genai esbuild protobufjs
 ```
 </details>
 
@@ -348,6 +372,22 @@ If working in an environment where AI usage or external API calls are prohibited
 * The **AI Optimizer** UI controls will be hidden.
 * ProtonDB community advice will rely strictly on local offline consensus templates.
 </details>
+
+---
+
+## 🇪🇺 EU AI Act Transparency Notice
+
+<p align="left">
+  <a href="https://digital-strategy.ec.europa.eu/en/policies/eu-icons-labelling-ai-generated-content" target="_blank" rel="noopener noreferrer">
+    <img src="./public/icons/eu-ai/eu-ai-generated-black.svg" alt="EU AI Act - AI-Generated Content Icon" height="38" />
+  </a>
+</p>
+
+This repository adheres to the transparency obligations established by the European Union under **Regulation (EU) 2024/1689 (Artificial Intelligence Act)**:
+
+* **Scope of AI Generation:** The documentation, code explanations, consensus templates, and architectural summaries within this repository were generated or refined using artificial intelligence coding assistants.
+* **Official Labelling Icon:** The icon above corresponds to the official label developed by the European Commission Directorate-General for Communications Networks, Content and Technology (DG CONNECT) under the EU Code of Practice on marking and labelling AI-generated content.
+* **Official Reference:** For details regarding the design, specifications, and regulatory context of the EU AI labels, please consult the [European Commission Policy on EU icons for labelling AI-generated content](https://digital-strategy.ec.europa.eu/en/policies/eu-icons-labelling-ai-generated-content).
 
 ---
 

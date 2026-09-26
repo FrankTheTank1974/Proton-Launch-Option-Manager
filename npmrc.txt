@@ -1,0 +1,2 @@
+# Explicitly permit required build & runner lifecycle scripts for newer npm versions
+allow-scripts=@google/genai,esbuild,protobufjs

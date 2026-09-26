@@ -9,8 +9,13 @@ import {
   Plus, 
   Flame,
   HardDrive,
-  FileJson
+  FileJson,
+  Monitor,
+  Maximize2,
+  Minimize2,
+  Columns
 } from 'lucide-react';
+import { DisplayMetrics, LayoutWidthMode } from '../utils/screenDetector';
 
 interface HeaderProps {
   distro: string;
@@ -22,8 +27,14 @@ interface HeaderProps {
   onOpenAddGame: () => void;
   onOpenScanLocalLibrary?: () => void;
   onOpenProtonManager?: () => void;
+  onOpenFlagScanner?: () => void;
   onOpenBackup?: () => void;
   aiEnabled?: boolean;
+  metrics?: DisplayMetrics;
+  layoutMode?: LayoutWidthMode;
+  isEffectiveWide?: boolean;
+  onOpenDisplayModal?: () => void;
+  onToggleQuickLayout?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -36,12 +47,18 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAddGame,
   onOpenScanLocalLibrary,
   onOpenProtonManager,
+  onOpenFlagScanner,
   onOpenBackup,
   aiEnabled = true,
+  metrics,
+  layoutMode = 'auto',
+  isEffectiveWide = false,
+  onOpenDisplayModal,
+  onToggleQuickLayout,
 }) => {
   return (
     <header className="bg-slate-900 border-b border-slate-800 text-white sticky top-0 z-30 shadow-lg">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className={isEffectiveWide ? "w-full px-3 sm:px-5 lg:px-6 2xl:px-8 transition-all duration-200" : "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 transition-all duration-200"}>
         <div className="flex flex-col md:flex-row md:items-center justify-between py-3 gap-3">
           
           {/* Logo & Main Title */}
@@ -65,6 +82,58 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Controls & Quick Modals */}
           <div className="flex flex-wrap items-center gap-2">
             
+            {/* Screen Resolution & Horizontal Display Optimizer Pill */}
+            {metrics && onOpenDisplayModal && (
+              <div className="flex items-center space-x-1">
+                <button
+                  onClick={onOpenDisplayModal}
+                  className="flex items-center space-x-1.5 bg-slate-800/90 hover:bg-slate-750 text-slate-200 border border-slate-700/80 px-2.5 py-1 rounded-lg text-xs font-mono transition shadow-sm group"
+                  title={`Detected Screen: ${metrics.screenWidth}×${metrics.screenHeight} | Viewport: ${metrics.viewportWidth}×${metrics.viewportHeight} (${metrics.aspectRatio} ${metrics.isLandscape ? 'Landscape' : 'Portrait'}). Click to configure full-screen horizontal display layout.`}
+                >
+                  <Monitor className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-110 transition shrink-0" />
+                  <span className="font-semibold text-slate-200">
+                    {metrics.viewportWidth}×{metrics.viewportHeight}
+                  </span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono font-semibold ${
+                    metrics.isLandscape 
+                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60' 
+                      : 'bg-amber-950 text-amber-300 border border-amber-800/60'
+                  }`}>
+                    {metrics.isLandscape ? 'Landscape' : 'Portrait'}
+                  </span>
+                  <span className="text-[10px] text-cyan-300 font-sans hidden sm:inline">
+                    {layoutMode === '3-column' ? '• 3-Col' : isEffectiveWide ? '• Full Width' : '• 1280px'}
+                  </span>
+                </button>
+
+                {onToggleQuickLayout && (
+                  <button
+                    onClick={onToggleQuickLayout}
+                    className={`p-1.5 rounded-lg border text-xs font-semibold transition ${
+                      isEffectiveWide 
+                        ? 'bg-cyan-950/80 border-cyan-700/60 text-cyan-300 hover:bg-cyan-900' 
+                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+                    }`}
+                    title={
+                      layoutMode === '3-column'
+                        ? '3-Column Dashboard active. Click to toggle mode.'
+                        : isEffectiveWide 
+                        ? 'Full Screen fluid layout active. Click to switch layout.' 
+                        : 'Contained 1280px box active. Click to expand to Full Screen width.'
+                    }
+                  >
+                    {layoutMode === '3-column' ? (
+                      <Columns className="w-3.5 h-3.5 text-purple-400" />
+                    ) : isEffectiveWide ? (
+                      <Maximize2 className="w-3.5 h-3.5 text-cyan-400" />
+                    ) : (
+                      <Minimize2 className="w-3.5 h-3.5 text-slate-400" />
+                    )}
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Distro Selector */}
             <div className="flex items-center bg-slate-800/80 border border-slate-700/80 rounded-lg px-2.5 py-1 text-xs">
               <span className="text-slate-400 mr-2 flex items-center gap-1 font-medium">
@@ -103,6 +172,18 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <Flame className="w-3.5 h-3.5 text-amber-400" />
                 <span>Proton Versions</span>
+              </button>
+            )}
+
+            {/* Runner Flag Scanner */}
+            {onOpenFlagScanner && (
+              <button
+                onClick={onOpenFlagScanner}
+                className="flex items-center space-x-1.5 bg-purple-950/80 hover:bg-purple-900/90 text-purple-200 border border-purple-700/60 px-3 py-1.5 rounded-lg text-xs font-semibold transition shadow-sm"
+                title="Rescan GitHub pages of Proton runners to check for newly added flags"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                <span>Runner Flags</span>
               </button>
             )}
 

@@ -503,6 +503,49 @@ export const CURATED_PROTONDB_DATABASE: Record<number | string, ProtonDbGameInsi
     recommendedCommand: 'PROTON_ENABLE_NVAPI=1 PROTON_USE_NTSYNC=1 gamemoderun %command%',
     sourceUrl: 'https://www.protondb.com/app/990080',
   },
+
+  // Quake Champions
+  611500: {
+    tier: 'Gold',
+    trending: 'Gold',
+    summary: 'Quake Champions runs smoothly on Linux via Proton GE and Proton Experimental. Utilizing DXVK DirectX 11 translation, GameMode governor locking, and low-latency thread synchronization delivers competitive 144Hz/240Hz+ arena performance with stable frame times.',
+    suggestions: [
+      {
+        title: 'GameMode CPU Governor & Latency Lock',
+        description: 'Locks CPU cores at maximum frequencies and grants process scheduling priority to avoid hitching in fast-paced arena combat.',
+        flag: 'gamemoderun',
+      },
+      {
+        title: 'MangoHud Frame Pacing & 1% Low Telemetry',
+        description: 'Provides lightweight frametime graph and telemetry monitoring without introducing input lag.',
+        flag: 'mangohud',
+      },
+      {
+        title: 'Kernel Thread Synchronization (NTSync / FSync)',
+        description: 'Accelerates engine event loops and multithreaded synchronization, minimizing frame pacing spikes.',
+        flag: 'PROTON_USE_NTSYNC=1',
+      },
+      {
+        title: 'NVIDIA NVAPI & Reflex Latency Reduction',
+        description: 'Exposes NVAPI to enable Reflex input latency reduction pipeline on supported NVIDIA GPUs.',
+        flag: 'PROTON_ENABLE_NVAPI=1',
+      },
+      {
+        title: 'AMD RADV Graphics Pipeline Library (GPL)',
+        description: 'Leverages fast pipeline libraries and Smart Access Memory on AMD GPUs to eliminate in-match shader stutter.',
+        flag: 'RADV_PERFTEST=sam',
+      },
+    ],
+    commentsAdvice: [
+      '**Twitch Arena Frame Pacing:** Competitive arena gameplay requires zero frame drops. Wrapping with `gamemoderun mangohud %command%` ensures rock-solid frame pacing.',
+      '**Saber3D DX11 to Vulkan:** DXVK translates the DirectX 11 renderer to Vulkan efficiently. Modern Vulkan Graphics Pipeline Libraries (GPL on Mesa RADV & NVIDIA) prevent mid-fight shader compilation hitching.',
+      '**Anti-Cheat Compatibility:** Quake Champions client-side anti-cheat functions reliably under modern GE-Proton (e.g. GE-Proton8 / GE-Proton9) and Proton Experimental.',
+      '**VRAM & Texture Allocation:** If encountering memory crashes on high-res map loads, community reports suggest setting texture quality to Medium or High.',
+      '**Engine Smoothing Disabling:** Players often add in-game arguments like `--set /Config/CONFIG/enableFpsSmooth 0` to uncap engine responsiveness.',
+    ],
+    recommendedCommand: 'PROTON_USE_NTSYNC=1 PROTON_ENABLE_NVAPI=1 gamemoderun mangohud %command%',
+    sourceUrl: 'https://www.protondb.com/app/611500',
+  },
 };
 
 /**
@@ -539,6 +582,7 @@ export function getProtonDbAdviceForGame(
     if (lowerName.includes('fallout') && id === '377160') return { ...item };
     if (lowerName.includes('skyrim') && id === '489830') return { ...item };
     if (lowerName.includes('hogwarts') && id === '990080') return { ...item };
+    if (lowerName.includes('quake') && id === '611500') return { ...item };
   }
 
   // 3. Heuristic Engine & Genre Analyzer
