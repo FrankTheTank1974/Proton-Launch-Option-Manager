@@ -276,3 +276,5 @@ export const DirectSteamLauncherModal: React.FC<DirectSteamLauncherModalProps> =
     </div>
   );
 };
+
+export default DirectSteamLauncherModal;

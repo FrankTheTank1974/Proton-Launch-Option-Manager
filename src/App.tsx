@@ -12,20 +12,19 @@ import { launchSteamGame } from './utils/steamLauncher';
 import { useDisplayResolution } from './utils/useDisplayResolution';
 import { Sparkles, Terminal, Gamepad2, ShieldCheck, CheckCircle2, AlertCircle, Info, MessageSquareQuote, Image as ImageIcon, Rocket, HardDrive } from 'lucide-react';
 
-// Lazy-loaded modal components for efficient code splitting and rapid initial load
-const CCodeGeneratorModal = React.lazy(() => import('./components/CCodeGeneratorModal').then(m => ({ default: m.CCodeGeneratorModal })));
-const VdfImportExportModal = React.lazy(() => import('./components/VdfImportExportModal').then(m => ({ default: m.VdfImportExportModal })));
-const PresetProfilesModal = React.lazy(() => import('./components/PresetProfilesModal').then(m => ({ default: m.PresetProfilesModal })));
-const GeminiAssistantModal = React.lazy(() => import('./components/GeminiAssistantModal').then(m => ({ default: m.GeminiAssistantModal })));
-const AddGameModal = React.lazy(() => import('./components/AddGameModal').then(m => ({ default: m.AddGameModal })));
-const ProtonDbModal = React.lazy(() => import('./components/ProtonDbModal').then(m => ({ default: m.ProtonDbModal })));
-const ScanLocalLibraryModal = React.lazy(() => import('./components/ScanLocalLibraryModal').then(m => ({ default: m.ScanLocalLibraryModal })));
-const ProtonManagerModal = React.lazy(() => import('./components/ProtonManagerModal').then(m => ({ default: m.ProtonManagerModal })));
-const BackupModal = React.lazy(() => import('./components/BackupModal').then(m => ({ default: m.BackupModal })));
-const SteamGridDbModal = React.lazy(() => import('./components/SteamGridDbModal').then(m => ({ default: m.SteamGridDbModal })));
-const DirectSteamLauncherModal = React.lazy(() => import('./components/DirectSteamLauncherModal').then(m => ({ default: m.DirectSteamLauncherModal })));
-const WriteToSteamModal = React.lazy(() => import('./components/WriteToSteamModal').then(m => ({ default: m.WriteToSteamModal })));
-const DisplayResolutionModal = React.lazy(() => import('./components/DisplayResolutionModal').then(m => ({ default: m.DisplayResolutionModal })));
+import { CCodeGeneratorModal } from './components/CCodeGeneratorModal';
+import { VdfImportExportModal } from './components/VdfImportExportModal';
+import { PresetProfilesModal } from './components/PresetProfilesModal';
+import { GeminiAssistantModal } from './components/GeminiAssistantModal';
+import { AddGameModal } from './components/AddGameModal';
+import { ProtonDbModal } from './components/ProtonDbModal';
+import { ScanLocalLibraryModal } from './components/ScanLocalLibraryModal';
+import { ProtonManagerModal } from './components/ProtonManagerModal';
+import { BackupModal } from './components/BackupModal';
+import { SteamGridDbModal } from './components/SteamGridDbModal';
+import { DirectSteamLauncherModal } from './components/DirectSteamLauncherModal';
+import { WriteToSteamModal } from './components/WriteToSteamModal';
+import { DisplayResolutionModal } from './components/DisplayResolutionModal';
 
 export default function App() {
   const [games, setGames] = useState<SteamGame[]>(INITIAL_STEAM_GAMES);

@@ -3,7 +3,7 @@ import { SteamGame } from '../types';
 import { launchSteamGame } from '../utils/steamLauncher';
 import { getGameExecutableInfo, resolveProtonRunnerInfo } from '../utils/gamePathResolver';
 
-const DirectSteamLauncherModal = React.lazy(() => import('./DirectSteamLauncherModal').then(m => ({ default: m.DirectSteamLauncherModal })));
+import { DirectSteamLauncherModal } from './DirectSteamLauncherModal';
 import {
   parseLaunchCommandTokens,
   getLaunchCommandStats,

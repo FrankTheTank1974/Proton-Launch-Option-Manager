@@ -328,3 +328,5 @@ export const DisplayResolutionModal: React.FC<DisplayResolutionModalProps> = ({
     </div>
   );
 };
+
+export default DisplayResolutionModal;
